@@ -89,13 +89,14 @@ CarDreamer/
 ### Key facts from the code
 - **Simulation rate:** 10 Hz (`fixed_delta_seconds: 0.1`).
 - **Observations** (per task, `observation.enabled`): usually `[camera, collision, birdeye_wpt]`. Traffic-light/stop-sign tasks use `birdeye_with_traffic_lights`.
-- **BEV (`birdeye_wpt`):** 128×128×3 image, 32 m range, ego offset 12, renders `roadmap, waypoints, ego_vehicle, background_vehicles` (configurable entities, observability `full | recursive_fov | fov`).
-- **Action space (default discrete):** 15 actions = acceleration ∈ {−2, 0, +2} × steer ∈ {−0.6, −0.2, 0, 0.2, 0.6}. Decoded in `CarlaBaseEnv.get_vehicle_control`:
-  `acc = discrete_acc[action // n_steer]`, `steer = discrete_steer[action % n_steer]`; acc > 0 → throttle = acc/3, else brake = −acc/3; CARLA steer = −steer.
+- **BEV (`birdeye_wpt`):** 128×128×3 uint8 RGB image, 32 m range, ego offset 12, renders `roadmap, waypoints, background_waypoints, ego_vehicle, background_vehicles` (configurable entities, observability `full | recursive_fov | fov`). `background_waypoints` (orange) are other cars' planned paths: the paper's "intention sharing". It is the **only** input to the world model (`dreamerv3.encoder.cnn_keys: birdeye_wpt`); camera and collision are never encoded.
+- **Action space (default discrete):** 15 actions = acceleration ∈ {−2, 0, +2} × steer ∈ {−0.6, −0.2, 0, 0.2, 0.6}. **Right-turn tasks override steer to {−0.9, −0.3, 0, 0.3, 0.9}** (`tasks.yaml:122-123`); always check the merged task config, not `common.yaml`. Decoded in `CarlaBaseEnv.get_vehicle_control`:
+  `acc = discrete_acc[action // n_steer]`, `steer = discrete_steer[action % n_steer]`; acc > 0 → throttle = acc/3, else brake = −acc/3; CARLA steer = −steer, so a **negative action steer turns right**.
+- **Route waypoints** (`info["ego_waypoints"]`) are ≤ 60 tuples `(x, y, yaw_degrees)`, 0.8 m apart; the third value is heading, not z.
   Continuous mode exists (`env.action.discrete: False`, acc ∈ [−3, 3], steer ∈ [−1, 1]). Note "steer" is a **normalized command**, not a physical wheel angle.
 - **Reward** (`carla_wpt_env.py`): waypoint bonus + speed term (track desired speed along route, penalize perpendicular speed) − collision penalty (scaled by speed) − out-of-lane penalty − time penalty + destination bonus.
-- **Termination:** collision, time limit, out of lane, destination reached.
-- **TTC (time-to-collision)** is already computed and logged each step — useful safety metric later.
+- **Termination:** collision, time limit, out of lane, destination reached. `step()` checks termination *before* refreshing the observation, so collision termination reads the previous step's sensor (one-step lag). Don't reorder this in our runner, or results stop matching upstream.
+- **TTC (time-to-collision)** is already computed and logged each step, but it only sees vehicles ahead in the ego's own lane, and it returns **0.0 when there is no such vehicle**. Don't read `ttc == 0` as "about to crash".
 - **Ground-truth obstacle info** is available from `WorldManager` (`actor_transforms`, `actor_polygons`, `actor_actions`). This is what the CBF will use later.
 
 ### Paper results to reproduce (DreamerV3 small, full observability, intention sharing)
@@ -203,6 +204,7 @@ obs, reward, done, info = env.step(u_safe)
 ### Verification checks to always include
 - Shapes and dtypes printed/asserted at every module boundary.
 - Our runner with `safety_filter = identity` must give the **same** results as upstream eval (same checkpoint, same seed) — this proves our wrappers don't change behavior.
+  Caveat: upstream eval *samples* actions (`dreamerv3/agent.py:56-58`), and the env has unseeded randomness, so episodes won't match one-for-one. Proposed check (to confirm with mentor): identical actions for the same recorded observations + RNG key, plus matching success/collision/speed rates. See `notes/codebase_walkthrough.md` §8.
 - Imagined vs. real BEV comparison over a short horizon as a sanity check of the world model.
 
 ---
