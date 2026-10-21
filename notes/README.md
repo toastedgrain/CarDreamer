@@ -20,3 +20,8 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
 ### Step 1: repo setup (2026-10-21)
 - Cloned `ucd-dare/CarDreamer` at upstream commit `1601324`, created the `dev` branch, added `notes/` and the project `CLAUDE.md`.
 - Verify: `git branch` shows `* dev`; `git log --oneline -2` shows our commit on top of `1601324`.
+
+### Step 2: code walkthrough (2026-10-21)
+- Wrote `codebase_walkthrough.md`: one `step()` of `carla_right_turn_hard` traced through config → env → observer → BEV → reward → termination, with `file:line` references, plus a preview of where the DreamerV3 agent plugs in.
+- Corrected facts in `../CLAUDE.md` that the code contradicted: right-turn steer set, BEV layers, waypoint format, collision lag, TTC meaning, and eval sampling.
+- Verify: spot-check a few `file:line` references in the note; its last section has commands that run without CARLA.
