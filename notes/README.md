@@ -63,3 +63,18 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
   - `DreamerEncoder.encode(obs, prev, prev_action)` runs upstream's own `preprocess` → CNN encoder → `rssm.obs_step` on the agent's weights, using upstream's `nj.pure` + `nj.jit` mechanism. `prev=None` means the first step of an episode.
 - Key test: over two steps, with the same weights, BEV and random keys, `encode()` gives **bit-for-bit the same latent** as upstream's `agent.policy(..., mode="eval")`. I also confirmed the check fails when the random keys differ.
 - Verify: `.venv/bin/pytest wm_pipeline -v` gives 47 passed in about 20 s.
+
+### Step 6: Stage 3 planner, safety-filter slot and runner (2026-10-21)
+- `Action` (in `actions.py`) is one command: `index`, `acc`, `steer`; `one_hot`, the agent's format, which is fed back to the encoder; and `env_action`, what `env.step()` takes. It covers continuous mode too, for the later CBF.
+- `planner.py`, `DreamerPlanner`:
+  - `act(x_t, seed)` samples u_nom from upstream's actor, exactly as eval mode does.
+  - `imagine(x_t, actions, seed)` rolls the RSSM forward under given actions with no observations and decodes `bev` (H, 128, 128, 3) uint8 and `reward` (H,). It's the recipe of upstream's `WorldModel.report()` open-loop videos.
+- Random keys: upstream's single policy call uses keys from one per-step seed in this order: prior sample, posterior sample, action sample. Our encoder and planner share the step seed, and the planner skips the encoder's two keys.
+- `safety_filter.py`: `identity_filter(u_nom, gt) -> u_nom`, the slot the CBF will replace.
+- `runner.py`: `run_episode(env, encoder, planner, safety_filter, seed, max_steps)` runs Stage 1 → 2 → 3 → filter → `env.step`. It feeds **u_safe**, the action actually executed, back to the encoder, and returns an `EpisodeLog` of `StepRecord`s (gt, u_nom, u_safe, reward, done, terminal flags).
+- Key tests:
+  - encoder + planner pick **exactly** upstream's eval action (and fail if the key skip is removed);
+  - over a whole mock episode the runner chooses exactly what upstream's `agent.policy` loop chooses;
+  - one imagined step gives exactly the encoder's next `deter`;
+  - an "always brake" filter changes both what the env executes and what the world model is told.
+- Verify: `.venv/bin/pytest wm_pipeline -v` gives 68 passed in about 20 s.

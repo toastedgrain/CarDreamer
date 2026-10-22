@@ -4,8 +4,10 @@ import numpy as np
 import pytest
 
 from wm_pipeline.dreamer_agent import CPU_OVERRIDES, build_agent, make_config
+from wm_pipeline.encoder import DreamerEncoder
 from wm_pipeline.mock_env import MockCarDreamerEnv
 from wm_pipeline.observation import make_observation
+from wm_pipeline.planner import DreamerPlanner
 
 
 @pytest.fixture(scope="session")
@@ -13,6 +15,17 @@ def agent():
     # A randomly initialized xsmall DreamerV3 agent on the CPU. Building it compiles upstream's training graph
     # (a few seconds), so the whole test run shares one.
     return build_agent(make_config("xsmall", CPU_OVERRIDES))
+
+
+@pytest.fixture(scope="session")
+def encoder(agent):
+    # Shared so its jitted function compiles once; tests that need reproducibility pass explicit seeds.
+    return DreamerEncoder(agent)
+
+
+@pytest.fixture(scope="session")
+def planner(agent):
+    return DreamerPlanner(agent)
 
 
 @pytest.fixture(scope="session")

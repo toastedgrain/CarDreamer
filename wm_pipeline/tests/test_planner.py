@@ -7,23 +7,11 @@ import pytest
 
 from wm_pipeline.actions import Action
 from wm_pipeline.dreamer_agent import draw_seed
-from wm_pipeline.encoder import DreamerEncoder
-from wm_pipeline.planner import DreamerPlanner
 
 # The warning upstream's eval.py:11 silences: int64 seeds are truncated to int32 for JAX's random keys.
 pytestmark = pytest.mark.filterwarnings("ignore:.*truncated to dtype int32.*")
 
 BRAKE, COAST, GAS_RIGHT = Action.from_index(2), Action.from_index(7), Action.from_index(10)
-
-
-@pytest.fixture(scope="module")
-def encoder(agent):
-    return DreamerEncoder(agent)
-
-
-@pytest.fixture(scope="module")
-def planner(agent):
-    return DreamerPlanner(agent)
 
 
 @pytest.fixture(scope="module")
