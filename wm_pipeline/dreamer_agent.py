@@ -1,16 +1,20 @@
 """
 Building a DreamerV3 agent the same way CarDreamer's dreamerv3/eval.py does, for Stages 2-3.
 
-Phase A builds one with random weights (the `xsmall` size on CPU) to test shapes and wiring.
-Phase B will load the pretrained carla_right_turn_hard checkpoint into a `small` agent.
+Phase A builds one with random weights (the `xsmall` size on CPU) to test shapes and wiring;
+load_checkpoint() puts the pretrained CarDreamer weights into a `small` agent.
 
 dreamerv3 is imported inside these functions rather than at the top of the module: importing it also
 imports tensorflow (several seconds), and `import wm_pipeline` should stay light.
 """
 
+import hashlib
+import io
 import pathlib
+import pickle
 import sys
 import warnings
+from typing import Optional
 
 import jax
 import numpy as np
@@ -74,6 +78,73 @@ def build_agent(config):
     action_space._discrete = True
     act_space = {"action": action_space, "reset": embodied.Space(bool)}
     return dreamerv3.Agent(obs_space, act_space, embodied.Counter(), config)
+
+
+# Security: upstream checkpoints are pickles (embodied/core/basics.py:91-95), and plain pickle.load calls whatever
+# Python object the file names, i.e. it can run arbitrary code. This unpickler only hands out numpy's array builders
+# and optax's optimizer-state classes after checking they are NamedTuples (plain data: nothing runs when one is
+# built). Any other name stops loading before it is called. Inspecting right_turn_hard.ckpt showed exactly these.
+_NUMPY_ARRAY_BUILDERS = {
+    ("numpy.core.multiarray", "_reconstruct"),
+    ("numpy.core.multiarray", "scalar"),
+    ("numpy", "ndarray"),
+    ("numpy", "dtype"),
+}
+
+
+class _CheckpointUnpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if (module, name) in _NUMPY_ARRAY_BUILDERS:
+            return super().find_class(module, name)
+        if module.startswith("optax.") and name.endswith("State"):
+            cls = super().find_class(module, name)
+            if isinstance(cls, type) and issubclass(cls, tuple) and hasattr(cls, "_fields"):
+                return cls
+        raise pickle.UnpicklingError(f"refusing to load {module}.{name}: a checkpoint should only hold arrays and optax optimizer states")
+
+
+def load_checkpoint(agent, path, sha256: Optional[str] = None) -> dict:
+    """
+    Put an upstream checkpoint's weights into `agent`, as eval.py does with checkpoint.load(path, keys=["agent"])
+    (dreamerv3/eval.py:94-97), but without plain pickle and only if every entry fits the agent.
+
+    The agent must be built with the precision the checkpoint was trained with: CarDreamer's checkpoints use
+    upstream's default jax.precision float16, which gives the optimizer extra loss-scaling state
+    (dreamerv3/jaxutils.py:407-411) that a float32 agent does not have.
+
+    :param sha256: if given, the file's SHA-256 must match (Hugging Face publishes it for every checkpoint).
+    :return: the checkpoint's other top-level entries, e.g. {"step": 461400, ...}, for logging.
+    """
+    raw = pathlib.Path(path).read_bytes()
+    if sha256 is not None and hashlib.sha256(raw).hexdigest() != sha256.lower():
+        raise ValueError(f"SHA-256 of {path} does not match the expected {sha256}")
+    data = _CheckpointUnpickler(io.BytesIO(raw)).load()
+    if not isinstance(data, dict) or "agent" not in data:
+        raise ValueError(f"{path} has no 'agent' entry; top level is {type(data).__name__}")
+
+    saved = data["agent"]
+    current = agent.save()  # upstream's own export of the agent's weights and optimizer state (jaxagent.py:100-107)
+    problems = [f"missing from checkpoint: {k}" for k in sorted(set(current) - set(saved))]
+    problems += [f"not in this agent: {k}" for k in sorted(set(saved) - set(current))]
+    for key in sorted(set(current) & set(saved)):
+        if jax.tree_util.tree_structure(current[key]) != jax.tree_util.tree_structure(saved[key]):
+            problems.append(f"different structure: {key}")
+            continue
+        for mine, theirs in zip(jax.tree_util.tree_leaves(current[key]), jax.tree_util.tree_leaves(saved[key])):
+            if np.shape(mine) != np.shape(theirs) or np.asarray(mine).dtype != np.asarray(theirs).dtype:
+                problems.append(f"{key}: agent has {np.shape(mine)} {np.asarray(mine).dtype}, checkpoint has {np.shape(theirs)} {np.asarray(theirs).dtype}")
+                break
+    if problems:
+        shown = "\n  ".join(problems[:10]) + (f"\n  ... and {len(problems) - 10} more" if len(problems) > 10 else "")
+        if all("_opt/" in problem for problem in problems):
+            shown += (
+                "\n  Only optimizer state differs, so the weights fit: build the agent with the checkpoint's"
+                " jax.precision (float16 for CarDreamer's checkpoints)."
+            )
+        raise ValueError(f"checkpoint {path} does not fit this agent (wrong size or config?):\n  {shown}")
+
+    agent.load(saved)  # upstream's JAXAgent.load (jaxagent.py:109-114)
+    return {k: v for k, v in data.items() if k != "agent"}
 
 
 def draw_seed(rng: np.random.Generator) -> np.int64:

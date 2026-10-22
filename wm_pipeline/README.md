@@ -17,6 +17,8 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
    the encoder's prior and posterior samples, key 3 for the planner's action sample. That is what makes them
    reproduce upstream's single `agent.policy` call exactly. If `encode_step` ever gains or loses a random sample,
    the planner's key skip in `act_step` must change with it; the upstream-match tests fail if they drift apart.
+5. **Load checkpoints only with `load_checkpoint`, never `pickle.load`.** Upstream checkpoints are pickles, which
+   can run code hidden in the file; our loader only builds arrays and optax optimizer states.
 
 ## Modules (filled in one step at a time)
 
@@ -25,7 +27,8 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 | `observation.py` | Stage 1: `Observation` (O_t = BEV, l = route waypoints) + ground-truth state for the CBF | 4a | done |
 | `mock_env.py` | minimal fake of the right-turn env: same `reset`/`step` interface and obs format, plus `route_waypoints()` and `ground_truth()`; no CARLA | 4b | done |
 | `actions.py` | action index / `[acc, steer]` → `(acc, steer)`, same formula as `CarlaBaseEnv.get_vehicle_control`; `Action` (u_nom / u_safe) | 4b, 6 | done |
-| `dreamer_agent.py` | builds a DreamerV3 agent with the config and spaces upstream's `eval.py` uses (random weights now, checkpoint in Phase B) | 5 | done |
+| `dreamer_agent.py` | builds a DreamerV3 agent with the config and spaces upstream's `eval.py` uses; `load_checkpoint` loads upstream checkpoints safely (restricted unpickler) | 5, B-prep | done |
+| `scripts/check_checkpoint.py` | one-off check of a real checkpoint on the CPU + "dream" figure (not part of the package: no `__init__.py`) | B-prep | done |
 | `encoder.py` | Stage 2: E(O_t, l) → x_t via DreamerV3 encoder + RSSM posterior; `LatentState` (deter, stoch, logit) | 5 | done |
 | `planner.py` | Stage 3: `act` (actor π → u_nom) and `imagine` (dynamics D + decoder + reward head R, open loop) | 6 | done |
 | `safety_filter.py` | u_nom → u_safe; identity now, CBF later | 6 | done |

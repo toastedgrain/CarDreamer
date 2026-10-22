@@ -130,6 +130,11 @@ In Phase B, the real env needs a thin adapter that provides the same two extra m
   - turns a seed into a random key the way upstream does;
   - fails if a call created weights instead of using the agent's.
 - `draw_seed(rng)` draws a step seed the way `jaxagent.py:208-210` does.
+- `load_checkpoint(agent, path, sha256)` loads upstream's pickle checkpoints **safely**. Its restricted unpickler
+  only builds numpy arrays and optax optimizer states (NamedTuples), so nothing else in the file can run. It
+  checks every entry against the agent and then calls upstream's `JAXAgent.load`.
+  - CarDreamer's checkpoints were trained in float16, so the agent must be built with `jax.precision: float16`.
+  - `scripts/check_checkpoint.py` runs the full check on a real checkpoint.
 
 ### `encoder.py`: **E**
 
@@ -258,8 +263,15 @@ telling the model u_nom would make its latent state drift away from reality.
 - one imagined step gives exactly the encoder's next `deter`;
 - the filter slot changes both what the env executes and what the world model is told.
 
+**Verified with the real `right_turn_hard` checkpoint on the laptop CPU** (float16, `scripts/check_checkpoint.py`):
+- the SHA-256 matches Hugging Face's, and the file holds only arrays and optimizer states;
+- **all 103 entries fit our 128×128 `small` agent exactly**: same architecture and config, 30.5M trainable parameters, trained for 461,400 steps;
+- our runner drives with the trained weights;
+- at the episode start, the trained actor nearly always accelerates (193 of 200 samples are "gas"; the random actor spreads over all 15 actions);
+- letting the actor drive inside the world model for 3 s produces a coherent BEV "dream": road, red ego car, and the blue route turning right at an approaching intersection, with green cross traffic appearing. See `figures/right_turn_hard_dream.png`. With random weights the same procedure gives noise.
+
 **Not verified yet:**
-- **The real weights.** Checkpoint loading isn't written yet, and float16 numerics on a GPU haven't been run.
+- **The real weights on a GPU.** float16 numerics on a GPU haven't been run, and the dream above is qualitative.
 - **The real CARLA env**, and the Phase B adapter that gives it `route_waypoints()` / `ground_truth()`.
 - **Upstream's paper numbers.** Step 8 checks whether they reproduce, and Step 9 checks our runner against upstream's eval on CARLA.
 - **Imagination quality.** With random weights the decoded frames are noise; Step 10 compares real and imagined BEV using the checkpoint.
@@ -279,4 +291,4 @@ telling the model u_nom would make its latent state drift away from reality.
    - A per-step action match on recorded observations works, as shown here.
    - Whole CARLA episodes won't match one for one, because the env has unseeded randomness, so compare success, collision and speed **rates** over many episodes.
 6. **Safety metric.** Upstream's TTC is 0 when no car is ahead, and it ignores other lanes, including the cross traffic in the right turn. Should we measure the minimum distance from the ground-truth polygons instead?
-7. **Model size.** Confirm that the released `carla_right_turn_hard` checkpoint is the 128×128 `small` model (30.5M) once we load it.
+7. ~~**Model size.**~~ **Answered:** `right_turn_hard.ckpt` is exactly the 128×128 `small` model (30.5M trainable), trained in float16. So the paper's "~18M" doesn't describe the released checkpoints.

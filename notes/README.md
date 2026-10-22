@@ -8,6 +8,7 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
 | `README.md` | this index + the step log below | 1 |
 | `codebase_walkthrough.md` | one `step()` of `carla_right_turn_hard`: config → env → observer → BEV → reward → termination | 2 |
 | `stages_1_3.md` | each stage 1–3 module: inputs/outputs/shapes, and how it maps to (O_t, l), E, D, R, π, C, u_nom; measured shapes and parameter counts; open questions for the mentor | 7 |
+| `figures/right_turn_hard_dream.png` | the trained world model "dreaming" 3 s of the right turn while its actor drives (every 3rd imagined frame) | Phase B prep |
 
 ## Repo layout and git
 - The clone lives in WSL at `~/projects/CarDreamer` (Linux filesystem: fast for Python, and OneDrive never touches `.git`).
@@ -89,3 +90,12 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
   - open questions for the mentor.
 - Measured: `small` with the 128×128 BEV has 30.5M trainable parameters, not ~18M. 17.9M is the same preset at 64×64. Corrected in `../CLAUDE.md`.
 - Phase A (Steps 1–7) is complete. Next is Phase B on the GPU machine.
+
+### Phase B prep: the pretrained checkpoint on the laptop (2026-10-21)
+- Downloaded `CarDreamer_checkpoints/right_turn_hard.ckpt` (371.0 MB) from `huggingface.co/ucd-dare/CarDreamer` to WSL `~/checkpoints/cardreamer/`, outside the repo. Its SHA-256 matches the published `1338b236…3351bbd`.
+- Upstream checkpoints are **pickles**, and plain `pickle.load` can run code hidden in the file. `load_checkpoint` (in `dreamer_agent.py`) uses a restricted unpickler that only builds numpy arrays and optax optimizer-state NamedTuples. A safe inspection showed the file contains exactly those: `step` = 461,400, `replay` = None, and 100 arrays + 3 optimizer states.
+- The checkpoint was trained in **float16**: upstream's float16 optimizer adds loss-scaling state. So the agent must be built with `jax.precision: float16`. Built that way, all 103 entries fit our 128×128 `small` agent exactly (30.5M trainable).
+- `wm_pipeline/scripts/check_checkpoint.py` reruns every check and saves `figures/right_turn_hard_dream.png`:
+  - the trained actor accelerates at the episode start;
+  - in a 3 s dream, the model imagines the road, the ego car, the route turning right at an intersection, and cross traffic.
+- Verify: `.venv/bin/pytest wm_pipeline -v` gives 74 passed (6 new loader tests, no download needed). With the checkpoint downloaded: `PYTHONPATH=. .venv/bin/python wm_pipeline/scripts/check_checkpoint.py --checkpoint ~/checkpoints/cardreamer/right_turn_hard.ckpt --out /tmp/dream.png`.
