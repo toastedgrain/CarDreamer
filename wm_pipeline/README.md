@@ -18,8 +18,9 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 
 | file | what it does | step | status |
 |---|---|---|---|
-| `observation.py` | Stage 1: `Observation` (O_t = BEV, l = route waypoints) + ground-truth state for the CBF | 4 | planned |
-| `mock_env.py` | fake env with CarDreamer's gym interface, so everything runs without CARLA | 4 | planned |
+| `observation.py` | Stage 1: `Observation` (O_t = BEV, l = route waypoints) + ground-truth state for the CBF | 4a | done |
+| `mock_env.py` | fake env with CarDreamer's gym interface, so everything runs without CARLA | 4b | planned |
+| `actions.py` | action index / `[acc, steer]` → `(acc, steer)`, same formula as `CarlaBaseEnv.get_vehicle_control` | 4b | planned |
 | `encoder.py` | Stage 2: E(O_t, l) → x_t via DreamerV3 encoder + RSSM posterior | 5 | planned |
 | `planner.py` | Stage 3: `act` (actor π → u_nom) and `imagine` (dynamics D rollouts) | 6 | planned |
 | `safety_filter.py` | u_nom → u_safe; identity now, CBF later | 6 | planned |

@@ -30,3 +30,13 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
 - Created `wm_pipeline/`, our own package, separate from upstream. It has a README with the package rules and the planned modules for Steps 4–6, and `tests/test_smoke.py`, which checks that importing `wm_pipeline` never imports `carla` or `car_dreamer` (Phase A has no CARLA).
 - Phase A Python environment: `.venv` in the repo root (already ignored by upstream's `.gitignore`), with Python 3.10.12, numpy 1.24.3 (upstream's pin) and pytest 9.1.1. Setup commands are in `wm_pipeline/README.md`.
 - Verify: `.venv/bin/pytest wm_pipeline -v` gives 1 passed, and `git diff master --stat` lists only `notes/`, `wm_pipeline/` and `CLAUDE.md`.
+
+### Step 4a: Stage 1 data structures (2026-10-21)
+- `wm_pipeline/observation.py` defines what Stage 1 hands to the rest of the pipeline:
+  - `Observation`: O_t = `bev` (128, 128, 3) uint8, plus l = `instruction`.
+  - `RouteInstruction`: `waypoints` (N, 3) float64 rows of (x, y, yaw°), with N ≤ 60.
+  - `VehicleState`: one car's position, yaw, velocity and 4-corner polygon.
+  - `GroundTruthState`: `timestep`, `ego`, and `others` (never including the ego).
+- `make_observation(raw_obs, route_waypoints)` keeps only the BEV (decision: BEV only, no camera) and the route.
+- Every class checks its shapes and dtypes when it's created. Ground truth stays separate from `Observation`, so the world model never sees it.
+- Verify: `.venv/bin/pytest wm_pipeline -v` gives 13 passed.
