@@ -60,7 +60,10 @@ Why CarDreamer: it uses a **bird's-eye-view (BEV)** observation instead of reali
 
 ### What CarDreamer is
 - A platform for **world-model-based RL** in CARLA. Not a new world model — it packages **DreamerV3** (also DreamerV2, Planning2Explore) with driving tasks, rewards, BEV rendering, and evaluation.
-- Experiments in the paper use a **small DreamerV3 (~18M params)**: 512 GRU units, CNN depth multiplier 32, 2-layer MLPs.
+- Experiments in the paper use a **small DreamerV3**: 512 GRU units, CNN depth multiplier 32, 2-layer MLPs.
+  "~18M params" is that preset's size for 64×64 images (measured: 17.9M). With CarDreamer's 128×128 BEV the same
+  preset measures **30.5M trainable** (world model 28.3M, actor 1.06M, critic 1.18M), mostly because the decoder's
+  input layer (12.6M) and the RSSM's observation layer (4.5M) grow. See `notes/stages_1_3.md` §3.
 - The tasks and the world model communicate **only through the Gym interface** (`reset()`, `step(action)`), which is what lets us insert components between them.
 
 ### Repository map
