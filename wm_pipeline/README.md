@@ -21,7 +21,8 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 | `observation.py` | Stage 1: `Observation` (O_t = BEV, l = route waypoints) + ground-truth state for the CBF | 4a | done |
 | `mock_env.py` | minimal fake of the right-turn env: same `reset`/`step` interface and obs format, plus `route_waypoints()` and `ground_truth()`; no CARLA | 4b | done |
 | `actions.py` | action index / `[acc, steer]` → `(acc, steer)`, same formula as `CarlaBaseEnv.get_vehicle_control` | 4b | done |
-| `encoder.py` | Stage 2: E(O_t, l) → x_t via DreamerV3 encoder + RSSM posterior | 5 | planned |
+| `dreamer_agent.py` | builds a DreamerV3 agent with the config and spaces upstream's `eval.py` uses (random weights now, checkpoint in Phase B) | 5 | done |
+| `encoder.py` | Stage 2: E(O_t, l) → x_t via DreamerV3 encoder + RSSM posterior; `LatentState` (deter, stoch, logit) | 5 | done |
 | `planner.py` | Stage 3: `act` (actor π → u_nom) and `imagine` (dynamics D rollouts) | 6 | planned |
 | `safety_filter.py` | u_nom → u_safe; identity now, CBF later | 6 | planned |
 | `runner.py` | the control loop that wires the stages to `env.step()` | 6 | planned |
@@ -32,17 +33,20 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 sudo apt install -y python3.10-venv        # Ubuntu's Python ships without venv/pip
 cd ~/projects/CarDreamer
 python3 -m venv .venv                       # .venv is already ignored by upstream's .gitignore
-.venv/bin/pip install numpy==1.24.3 pytest==9.1.1
+.venv/bin/pip install -r wm_pipeline/requirements-phase-a.txt
 ```
 
-`numpy==1.24.3` matches upstream's pin (`pyproject.toml`, `dreamerv3/requirements.txt`), so Phase A tests run on the
-same numpy as the GPU machine. JAX gets added in Step 5.
+Every version in `requirements-phase-a.txt` is upstream's own pin (`pyproject.toml`, `dreamerv3/requirements.txt`),
+with the CPU builds of jaxlib and TensorFlow. TensorFlow does no math here: it is only needed because importing
+DreamerV3's `embodied` package imports it. The venv is about 1.7 GB.
 
 ## Run the tests
 
 ```bash
 cd ~/projects/CarDreamer && .venv/bin/pytest wm_pipeline -v
 ```
+
+About 20 s on the laptop; most of it is building one random `xsmall` DreamerV3 agent for the encoder tests.
 
 `tests/__init__.py` is intentionally empty: it makes pytest put the repo root on `sys.path`, so `import wm_pipeline`
 works when you run plain `pytest` from the repo root.

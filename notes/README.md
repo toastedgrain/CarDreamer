@@ -53,3 +53,13 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
   - stepping before `reset()` or after the episode is over raises an error.
 - The smoke test now imports every module in the package, so any module with a top-level `import carla` fails it.
 - Verify: `.venv/bin/pytest wm_pipeline -v` gives 40 passed.
+
+### Step 5: Stage 2 encoder (2026-10-21)
+- New packages, all at upstream's pins and installed from `wm_pipeline/requirements-phase-a.txt`: jax/jaxlib 0.4.34 (CPU), optax, tensorflow-probability, tensorflow-cpu 2.13, ruamel.yaml, cloudpickle.
+  TensorFlow is only there because importing DreamerV3's `embodied` package imports it.
+- `wm_pipeline/dreamer_agent.py`: `make_config(size, overrides)` and `build_agent(config)` build a DreamerV3 agent the way `dreamerv3/eval.py` does, with the same observation and action spaces as the right-turn task.
+- `wm_pipeline/encoder.py`:
+  - `LatentState` is x_t, made of `deter` (GRU memory: 512 for small, 64 for xsmall), `stoch` (32 × 32, each row a one-hot sample) and `logit` (32 × 32, the distribution `stoch` was sampled from). `features()` gives deter + flattened stoch, which is what the heads read.
+  - `DreamerEncoder.encode(obs, prev, prev_action)` runs upstream's own `preprocess` → CNN encoder → `rssm.obs_step` on the agent's weights, using upstream's `nj.pure` + `nj.jit` mechanism. `prev=None` means the first step of an episode.
+- Key test: over two steps, with the same weights, BEV and random keys, `encode()` gives **bit-for-bit the same latent** as upstream's `agent.policy(..., mode="eval")`. I also confirmed the check fails when the random keys differ.
+- Verify: `.venv/bin/pytest wm_pipeline -v` gives 47 passed in about 20 s.

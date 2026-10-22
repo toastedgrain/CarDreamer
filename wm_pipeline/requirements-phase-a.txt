@@ -1,0 +1,14 @@
+# Phase A (laptop, CPU only) environment for wm_pipeline:
+#   .venv/bin/pip install -r wm_pipeline/requirements-phase-a.txt
+# Versions are upstream's own pins (pyproject.toml, dreamerv3/requirements.txt);
+# jaxlib and tensorflow are the CPU builds instead of upstream's CUDA ones.
+numpy==1.24.3
+pytest==9.1.1
+jax==0.4.34
+jaxlib==0.4.34
+optax==0.2.2
+tensorflow-probability==0.21.0
+# Never used for math: `import embodied` imports tensorflow at the top of embodied/replay/base_prioritized_reverb.py.
+tensorflow-cpu==2.13.0
+ruamel.yaml==0.18.6
+cloudpickle==3.0.0
