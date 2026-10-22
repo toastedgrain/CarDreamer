@@ -5,12 +5,14 @@ Phase A builds one with random weights (the `xsmall` size on CPU) to test shapes
 Phase B will load the pretrained carla_right_turn_hard checkpoint into a `small` agent.
 
 dreamerv3 is imported inside these functions rather than at the top of the module: importing it also
-imports jax and tensorflow (several seconds), and `import wm_pipeline` should stay light.
+imports tensorflow (several seconds), and `import wm_pipeline` should stay light.
 """
 
 import pathlib
 import sys
+import warnings
 
+import jax
 import numpy as np
 
 from .actions import ActionConfig
@@ -72,3 +74,32 @@ def build_agent(config):
     action_space._discrete = True
     act_space = {"action": action_space, "reset": embodied.Space(bool)}
     return dreamerv3.Agent(obs_space, act_space, embodied.Counter(), config)
+
+
+def draw_seed(rng: np.random.Generator) -> np.int64:
+    """One random seed, drawn the way upstream's agent draws one per policy call (jaxagent.py:208-210)."""
+    return rng.integers(2**63 - 1)
+
+
+def run_on_agent_weights(agent, jitted_fn, inputs: tuple, seed):
+    """
+    Run a function built with nj.jit(nj.pure(...)) on the agent's policy weights; return its output as numpy.
+
+    Shared by the encoder and the planner. It moves data explicitly (upstream disallows implicit transfers,
+    jaxagent.py:148), turns the seed into a random key the way upstream does, and fails if the call created
+    weights instead of using the agent's.
+    """
+    device = agent.policy_devices[0]
+    varibs = agent.varibs if agent.single_device else agent.policy_varibs
+    inputs = jax.device_put(inputs, device)
+    with warnings.catch_warnings():
+        # The warning upstream's eval.py:11 silences: the int64 seed is truncated to int32 for the random key.
+        warnings.filterwarnings("ignore", ".*truncated to dtype int32.*")
+        rng = jax.device_put(np.int64(seed), device)
+    out, state = jitted_fn(varibs, rng, *inputs)
+    # nj.jit only creates weights that do not exist yet. If any were created, this call ran on fresh random
+    # weights instead of the agent's (e.g. a module path changed), so fail loudly.
+    created = set(state) - set(varibs)
+    if created:
+        raise RuntimeError(f"the call created {len(created)} new weights instead of using the agent's, e.g. {sorted(created)[:3]}")
+    return jax.device_get(out)

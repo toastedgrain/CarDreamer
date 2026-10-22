@@ -1,37 +1,20 @@
-"""Step 5 tests: the Stage 2 encoder, on a randomly initialized xsmall DreamerV3 agent on the CPU."""
+"""Step 5 tests: the Stage 2 encoder, on a randomly initialized xsmall DreamerV3 agent on the CPU.
+
+The `agent` and `episode` fixtures come from conftest.py.
+"""
 
 import copy
 
 import numpy as np
 import pytest
 
-from wm_pipeline.dreamer_agent import CPU_OVERRIDES, build_agent, make_config
+from wm_pipeline.dreamer_agent import draw_seed
 from wm_pipeline.encoder import DreamerEncoder
-from wm_pipeline.mock_env import MockCarDreamerEnv
-from wm_pipeline.observation import make_observation
 
 # The warning upstream's eval.py:11 silences: int64 seeds are truncated to int32 for JAX's random keys.
 pytestmark = pytest.mark.filterwarnings("ignore:.*truncated to dtype int32.*")
 
 XSMALL_SHAPES = {"deter": (64,), "stoch": (32, 32), "logit": (32, 32)}
-
-
-@pytest.fixture(scope="module")
-def agent():
-    # Building compiles upstream's training graph once (a few seconds), so all tests share one agent.
-    return build_agent(make_config("xsmall", CPU_OVERRIDES))
-
-
-@pytest.fixture(scope="module")
-def episode():
-    # Three consecutive Stage 1 observations from the mock env.
-    env = MockCarDreamerEnv(seed=0)
-    raw = env.reset()
-    observations = [make_observation(raw, env.route_waypoints())]
-    for _ in range(2):
-        raw, _, _, _ = env.step(7)
-        observations.append(make_observation(raw, env.route_waypoints()))
-    return observations
 
 
 def _one_hot(index, n=15):
@@ -59,6 +42,14 @@ def test_same_seed_gives_the_same_latent(agent, episode):
     b = DreamerEncoder(agent, rng=np.random.default_rng(5)).encode(episode[0])
     for name in XSMALL_SHAPES:
         np.testing.assert_array_equal(getattr(a, name), getattr(b, name), err_msg=name)
+
+
+def test_explicit_seed_is_the_same_as_drawing_it_from_the_generator(agent, episode):
+    # The runner passes one seed per step; it must mean exactly what the encoder's own generator would have drawn.
+    from_generator = DreamerEncoder(agent, rng=np.random.default_rng(7)).encode(episode[0])
+    explicit = DreamerEncoder(agent).encode(episode[0], seed=draw_seed(np.random.default_rng(7)))
+    for name in XSMALL_SHAPES:
+        np.testing.assert_array_equal(getattr(from_generator, name), getattr(explicit, name), err_msg=name)
 
 
 def test_different_seeds_sample_different_stoch_from_the_same_distribution(agent, episode):

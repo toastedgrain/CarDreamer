@@ -14,14 +14,12 @@ The instruction l has no separate input: in CarDreamer the route reaches the mod
 into the BEV. If the project adds a text instruction, this is where it would be encoded.
 """
 
-import warnings
 from dataclasses import dataclass
 from typing import Optional
 
-import jax
 import numpy as np
 
-from .dreamer_agent import import_dreamerv3
+from .dreamer_agent import draw_seed, import_dreamerv3, run_on_agent_weights
 from .observation import BEV_KEY, Observation
 
 
@@ -61,8 +59,8 @@ class DreamerEncoder:
     def __init__(self, agent, rng: Optional[np.random.Generator] = None):
         """
         :param agent: a dreamerv3.Agent, e.g. from dreamer_agent.build_agent().
-        :param rng: where the random keys for sampling `stoch` come from. Upstream's agent draws them the same
-            way from its own generator (jaxagent.py:208-210); pass a generator to make encoding reproducible.
+        :param rng: where random seeds come from when encode() is not given one. Upstream's agent draws its seeds
+            the same way from its own generator (jaxagent.py:208-210).
         """
         _, _, nj = import_dreamerv3()
         from dreamerv3 import jaxutils
@@ -70,7 +68,6 @@ class DreamerEncoder:
         if len(agent.policy_devices) != 1:
             raise NotImplementedError("DreamerEncoder supports a single policy device, like CarDreamer's eval")
         self._agent = agent
-        self._device = agent.policy_devices[0]
         self._rng = rng if rng is not None else np.random.default_rng(0)
         rssm_config = agent.agent.config.rssm
         self._latent_shapes = {
@@ -89,15 +86,24 @@ class DreamerEncoder:
             latent, _ = model.wm.rssm.obs_step(prev_latent, prev_action, embed, obs["is_first"])
             return latent
 
-        self._encode_step = nj.jit(nj.pure(encode_step), device=self._device)
+        self._encode_step = nj.jit(nj.pure(encode_step), device=agent.policy_devices[0])
 
-    def encode(self, obs: Observation, prev: Optional[LatentState] = None, prev_action: Optional[np.ndarray] = None) -> LatentState:
+    def encode(
+        self,
+        obs: Observation,
+        prev: Optional[LatentState] = None,
+        prev_action: Optional[np.ndarray] = None,
+        seed: Optional[int] = None,
+    ) -> LatentState:
         """
         :param obs: Stage 1 output (O_t, l).
         :param prev: x_{t-1}, or None on the first step of an episode. On the first step the RSSM ignores any
             previous state and starts from its learned initial state (nets.py:110-115).
-        :param prev_action: the action taken after x_{t-1}, in the agent's own format: a one-hot vector of
+        :param prev_action: the action executed after x_{t-1}, in the agent's own format: a one-hot vector of
             length 15 in discrete mode. Must be None exactly when `prev` is None.
+        :param seed: this step's random seed. The runner gives the planner the same seed, so that together they
+            make the same random choices as upstream's single policy call (see planner.py). If None, a seed is
+            drawn from `rng`.
         """
         is_first = prev is None
         if is_first != (prev_action is None):
@@ -118,21 +124,7 @@ class DreamerEncoder:
             "is_terminal": np.array([False]),  # preprocess() needs it to compute `cont`; it does not affect x_t
         }
         prev_latent = {"deter": prev.deter[None], "stoch": prev.stoch[None], "logit": prev.logit[None]}
-
-        # Explicit transfers: upstream sets jax_transfer_guard to "disallow" (jaxagent.py:148), so implicit ones fail.
-        inputs = jax.device_put((batch, prev_latent, prev_action[None]), self._device)
-        varibs = self._agent.varibs if self._agent.single_device else self._agent.policy_varibs
-        with warnings.catch_warnings():
-            # Same warning upstream's eval.py:11 silences: the int64 seed is truncated to int32 for the PRNG key.
-            warnings.filterwarnings("ignore", ".*truncated to dtype int32.*")
-            rng = jax.device_put(self._rng.integers(2**63 - 1), self._device)
-        latent, state = self._encode_step(varibs, rng, *inputs)
-
-        # nj.jit only creates parameters that do not exist yet. If any were created, this call used fresh random
-        # weights instead of the agent's (e.g. a module path changed), so fail loudly.
-        created = set(state) - set(varibs)
-        if created:
-            raise RuntimeError(f"encoding created {len(created)} new weights instead of using the agent's, e.g. {sorted(created)[:3]}")
-
-        latent = jax.device_get(latent)
+        if seed is None:
+            seed = draw_seed(self._rng)
+        latent = run_on_agent_weights(self._agent, self._encode_step, (batch, prev_latent, prev_action[None]), seed)
         return LatentState(deter=latent["deter"][0], stoch=latent["stoch"][0], logit=latent["logit"][0])

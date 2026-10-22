@@ -10,7 +10,7 @@ Units, as in CarDreamer: `acc` is a pedal command (acc / 3 becomes throttle or b
 """
 
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Optional, Tuple, Union
 
 import numpy as np
 
@@ -54,3 +54,53 @@ def decode_action(action, config: ActionConfig = ActionConfig()) -> Tuple[float,
     acc = float(np.clip(action[0], *config.continuous_acc))
     steer = float(np.clip(action[1], *config.continuous_steer))
     return acc, steer
+
+
+@dataclass(frozen=True)
+class Action:
+    """
+    One driving command: u_nom from the planner, or u_safe from the safety filter.
+
+    Discrete mode: `index` in [0, 15) together with its decoded (acc, steer).
+    Continuous mode: `index` is None and (acc, steer) is the command itself.
+    Build one with Action.from_index() or Action.from_continuous(), which keep the fields consistent.
+    """
+
+    index: Optional[int]
+    acc: float
+    steer: float
+    config: ActionConfig = ActionConfig()
+
+    def __post_init__(self):
+        if self.index is None:
+            if self.config.discrete:
+                raise ValueError("a discrete-mode action needs an index")
+            expected = decode_action(np.array([self.acc, self.steer]), self.config)
+        else:
+            expected = decode_action(self.index, self.config)
+        if (self.acc, self.steer) != expected:
+            raise ValueError(f"(acc, steer) = {(self.acc, self.steer)} does not match the decoded command {expected}")
+
+    @classmethod
+    def from_index(cls, index: int, config: ActionConfig = ActionConfig()) -> "Action":
+        acc, steer = decode_action(index, config)
+        return cls(index=int(index), acc=acc, steer=steer, config=config)
+
+    @classmethod
+    def from_continuous(cls, acc: float, steer: float, config: ActionConfig = ActionConfig(discrete=False)) -> "Action":
+        acc, steer = decode_action(np.array([acc, steer]), config)
+        return cls(index=None, acc=acc, steer=steer, config=config)
+
+    @property
+    def one_hot(self) -> np.ndarray:
+        """(15,) float32 with a 1 at `index`: the agent's own action format, which the encoder needs back."""
+        if self.index is None:
+            raise ValueError("a continuous action has no one-hot form")
+        vector = np.zeros(self.config.n_actions, np.float32)
+        vector[self.index] = 1.0
+        return vector
+
+    @property
+    def env_action(self) -> Union[int, np.ndarray]:
+        """What env.step() takes: the index in discrete mode, [acc, steer] in continuous mode."""
+        return self.index if self.index is not None else np.array([self.acc, self.steer])
