@@ -7,7 +7,7 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
 |---|---|---|
 | `README.md` | this index + the step log below | 1 |
 | `codebase_walkthrough.md` | one `step()` of `carla_right_turn_hard`: config → env → observer → BEV → reward → termination | 2 |
-| `stages_1_3.md` | each stage 1–3 module: inputs/outputs/shapes, and how it maps to (O_t, l), E, D, R, π, C, u_nom | 7 |
+| `stages_1_3.md` | each stage 1–3 module: inputs/outputs/shapes, and how it maps to (O_t, l), E, D, R, π, C, u_nom; measured shapes and parameter counts; open questions for the mentor | 7 |
 
 ## Repo layout and git
 - The clone lives in WSL at `~/projects/CarDreamer` (Linux filesystem: fast for Python, and OneDrive never touches `.git`).
@@ -78,3 +78,14 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
   - one imagined step gives exactly the encoder's next `deter`;
   - an "always brake" filter changes both what the env executes and what the world model is told.
 - Verify: `.venv/bin/pytest wm_pipeline -v` gives 68 passed in about 20 s.
+
+### Step 7: Stages 1–3 write-up (2026-10-21)
+- Wrote `stages_1_3.md`. It contains:
+  - the symbol map (O_t, l, gt, E, x_t, D, R, π, C, u_nom, u_safe, with what's used while driving);
+  - one section per module;
+  - a measured shapes and parameter-count sheet for `xsmall` and `small`;
+  - the annotated control step;
+  - what's verified and what isn't;
+  - open questions for the mentor.
+- Measured: `small` with the 128×128 BEV has 30.5M trainable parameters, not ~18M. 17.9M is the same preset at 64×64. Corrected in `../CLAUDE.md`.
+- Phase A (Steps 1–7) is complete. Next is Phase B on the GPU machine.
