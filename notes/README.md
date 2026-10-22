@@ -40,3 +40,16 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
 - `make_observation(raw_obs, route_waypoints)` keeps only the BEV (decision: BEV only, no camera) and the route.
 - Every class checks its shapes and dtypes when it's created. Ground truth stays separate from `Observation`, so the world model never sees it.
 - Verify: `.venv/bin/pytest wm_pipeline -v` gives 13 passed.
+
+### Step 4b: minimal mock env + action decoding (2026-10-21)
+- `wm_pipeline/actions.py`: `decode_action` turns an action into the `(acc, steer)` command with the same formula as `CarlaBaseEnv.get_vehicle_control`. The defaults are the right-turn values: index 0–14 → acc ∈ {−2, 0, 2} × steer ∈ {−0.9, −0.3, 0, 0.3, 0.9}. Continuous `[acc, steer]` is clipped to [−3, 3] × [−1, 1], where upstream clipping happens in DreamerV3's wrapper / CARLA.
+- `wm_pipeline/mock_env.py`: `MockCarDreamerEnv` has the same `reset()` / `step()` 4-tuple and the same obs keys, shapes and dtypes as the real right-turn env, plus `route_waypoints()` and `ground_truth()`. It's deliberately minimal:
+  - random-noise images;
+  - the ego slides along a straight 48 m route at 4 m/s, whatever the action is;
+  - 3 cross-traffic cars move at constant velocity;
+  - nothing collides, and the reward is always 0;
+  - the episode ends after `episode_length` steps;
+  - it's seeded, so the same seed gives the same episode;
+  - stepping before `reset()` or after the episode is over raises an error.
+- The smoke test now imports every module in the package, so any module with a top-level `import carla` fails it.
+- Verify: `.venv/bin/pytest wm_pipeline -v` gives 40 passed.

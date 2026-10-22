@@ -10,7 +10,7 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 
 1. **Importing `wm_pipeline` must never import `carla` or `car_dreamer`.** Both need a CARLA install, and Phase A
    runs on a laptop without one. Code that talks to the real env imports them inside the function that needs them.
-   `tests/test_smoke.py` enforces this.
+   `tests/test_smoke.py` enforces this by importing every module of the package in a fresh process.
 2. **No edits to upstream files.** If something seems to need one, ask first.
 3. **Assert shapes and dtypes at every module boundary.**
 
@@ -19,8 +19,8 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 | file | what it does | step | status |
 |---|---|---|---|
 | `observation.py` | Stage 1: `Observation` (O_t = BEV, l = route waypoints) + ground-truth state for the CBF | 4a | done |
-| `mock_env.py` | fake env with CarDreamer's gym interface, so everything runs without CARLA | 4b | planned |
-| `actions.py` | action index / `[acc, steer]` → `(acc, steer)`, same formula as `CarlaBaseEnv.get_vehicle_control` | 4b | planned |
+| `mock_env.py` | minimal fake of the right-turn env: same `reset`/`step` interface and obs format, plus `route_waypoints()` and `ground_truth()`; no CARLA | 4b | done |
+| `actions.py` | action index / `[acc, steer]` → `(acc, steer)`, same formula as `CarlaBaseEnv.get_vehicle_control` | 4b | done |
 | `encoder.py` | Stage 2: E(O_t, l) → x_t via DreamerV3 encoder + RSSM posterior | 5 | planned |
 | `planner.py` | Stage 3: `act` (actor π → u_nom) and `imagine` (dynamics D rollouts) | 6 | planned |
 | `safety_filter.py` | u_nom → u_safe; identity now, CBF later | 6 | planned |
