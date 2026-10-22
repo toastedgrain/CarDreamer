@@ -130,6 +130,9 @@ Recommended first reproduction target: **`carla_right_turn_hard`** (also used fo
 - **Phase A environment:** `.venv` in the repo root, set up from `wm_pipeline/requirements-phase-a.txt` (upstream's pins, CPU builds of jaxlib and TensorFlow).
 - **Importing `dreamerv3` requires TensorFlow**, even though all model math is JAX: `embodied/replay/__init__.py` → `base_prioritized_reverb.py:8` imports it at module top. Don't try to drop TensorFlow from an environment that imports DreamerV3.
 - **Building a DreamerV3 agent sets JAX's transfer guard to "disallow" for the whole process** (`dreamerv3/jaxagent.py:148`). Any of our code running alongside it must move arrays with `jax.device_put` / `jax.device_get`; `np.asarray(jax_array)` or passing numpy straight into a jitted function will raise.
+- **Building an agent also sets the compute precision for the whole process** (`jaxutils.COMPUTE_DTYPE`, `jaxagent.py:151`). Never mix float16 and float32 agents in one Python process, e.g. in the test suite, which uses float32 `xsmall` agents.
+- **Pretrained checkpoints** (`huggingface.co/ucd-dare/CarDreamer`, 371 MB each; `right_turn_hard.ckpt` is in WSL `~/checkpoints/cardreamer/`, outside the repo) are **pickles**, so plain `pickle.load` or upstream's `Checkpoint.load` can run code hidden in the file. In our code, load them only with `wm_pipeline.dreamer_agent.load_checkpoint` (restricted unpickler).
+  They were trained with `jax.precision: float16`, which adds loss-scaling optimizer state, so build the agent with float16 to load them.
 - Upstream install (for Phase B, from the CarDreamer README):
   ```bash
   export CARLA_ROOT="</path/to/carla>"
