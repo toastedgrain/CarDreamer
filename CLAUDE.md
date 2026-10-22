@@ -124,6 +124,9 @@ Recommended first reproduction target: **`carla_right_turn_hard`** (also used fo
 - Therefore, plan the work in two phases:
   - **Phase A — laptop (no GPU, no CARLA server):** read and document the code, design the module structure and interfaces, write the stage 1–3 code, and test it with **mock data** (e.g. synthetic 128×128 BEV arrays, a fake env that implements the same Gym interface). Nothing in Phase A may require a running CARLA server or a GPU.
   - **Phase B — GPU machine:** install CARLA 0.9.15 + CarDreamer + DreamerV3 deps, evaluate the pretrained `carla_right_turn_hard` checkpoint, compare with the paper, then run our stage 1–3 pipeline against the real environment.
+- **Phase A environment:** `.venv` in the repo root, set up from `wm_pipeline/requirements-phase-a.txt` (upstream's pins, CPU builds of jaxlib and TensorFlow).
+- **Importing `dreamerv3` requires TensorFlow**, even though all model math is JAX: `embodied/replay/__init__.py` → `base_prioritized_reverb.py:8` imports it at module top. Don't try to drop TensorFlow from an environment that imports DreamerV3.
+- **Building a DreamerV3 agent sets JAX's transfer guard to "disallow" for the whole process** (`dreamerv3/jaxagent.py:148`). Any of our code running alongside it must move arrays with `jax.device_put` / `jax.device_get`; `np.asarray(jax_array)` or passing numpy straight into a jitted function will raise.
 - Upstream install (for Phase B, from the CarDreamer README):
   ```bash
   export CARLA_ROOT="</path/to/carla>"
