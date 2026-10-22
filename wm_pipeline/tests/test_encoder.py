@@ -76,7 +76,7 @@ def test_prev_and_prev_action_must_come_together(agent, episode):
         encoder.encode(episode[1], prev=x0, prev_action=np.zeros(3))
 
 
-def test_matches_upstream_policy_latent_over_two_steps(agent, episode):
+def test_matches_upstream_policy_latent_over_two_steps(agent, episode, upstream_batch):
     """Same weights, same BEV, same random keys: encode() must give exactly the latent upstream's policy computes."""
     # Upstream's agent draws one random key per policy call from agent.rng (jaxagent.py:53, 208-210).
     # Our encoder gets a generator in the same state, so it draws the same keys.
@@ -86,17 +86,7 @@ def test_matches_upstream_policy_latent_over_two_steps(agent, episode):
 
     upstream_state, ours_prev, prev_action = None, None, None
     for t, obs in enumerate(episode[:2]):
-        # What upstream's BatchEnv hands the agent: every observation key, with a batch dimension of 1.
-        batch = {
-            "birdeye_wpt": obs.bev[None],
-            "camera": np.zeros((1, 128, 128, 3), np.uint8),
-            "collision": np.zeros((1, 1), np.float32),
-            "reward": np.zeros(1, np.float32),
-            "is_first": np.array([t == 0]),
-            "is_last": np.array([False]),
-            "is_terminal": np.array([False]),
-        }
-        _, upstream_state = agent.policy(batch, upstream_state, mode="eval")
+        _, upstream_state = agent.policy(upstream_batch(obs, is_first=t == 0), upstream_state, mode="eval")
         (upstream_latent, upstream_action), _, _ = upstream_state
 
         ours = encoder.encode(obs, ours_prev, prev_action)
