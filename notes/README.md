@@ -99,3 +99,23 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
   - the trained actor accelerates at the episode start;
   - in a 3 s dream, the model imagines the road, the ego car, the route turning right at an intersection, and cross traffic.
 - Verify: `.venv/bin/pytest wm_pipeline -v` gives 74 passed (6 new loader tests, no download needed). With the checkpoint downloaded: `PYTHONPATH=. .venv/bin/python wm_pipeline/scripts/check_checkpoint.py --checkpoint ~/checkpoints/cardreamer/right_turn_hard.ckpt --out /tmp/dream.png`.
+
+### Step 8: upstream eval of the pretrained checkpoint on the lab machine (2026-11-03)
+- Ran upstream's `dreamerv3/eval.py` on `carla_right_turn_hard` with `right_turn_hard.ckpt`, on the lab PC (RTX 5080, 16 GB). The full setup and commands are in `../CLAUDE.md` section 4.
+- Result over 289 episodes (50,000 steps, about 15 minutes):
+
+  | Metric | Ours | Paper |
+  |---|---|---|
+  | Success | 100.00% | 99.58% |
+  | Collision | 0.00% | 0.42% |
+  | Avg speed (m/s) | 2.95 ± 0.02 | 2.92 |
+
+  Also: out of lane 0%, time exceeded 0, avg episode length 171.3 steps, avg score 345.93.
+- How to read it:
+  - The results are consistent with the paper, but not better than it. If the true failure rate were the paper's 0.42%, there would still be about a 30% chance of 0 failures in 289 episodes. Zero failures only tells us the true rate is probably below about 1%.
+  - The `±` from `eval_stats.py` is the standard error over 3 batches of episodes, so `0.00% ± 0.00%` means no batch had a failure, not that there's no uncertainty.
+  - "Avg. Speed Over 4 Ratio" (73.75%) is mean speed ÷ 4 m/s (`eval_stats.py:65`), not the share of time spent above 4 m/s.
+- Differences from upstream's setup: Triton matmul off (`--xla_gpu_enable_triton_gemm=false`, needed to avoid a compile crash), CARLA's Windows build with Python in WSL2, TensorFlow CPU build. No side-by-side run on upstream's exact setup was done, so their effect isn't measured.
+- The metrics are on the lab machine in `logdir/eval_right_turn_hard/metrics.jsonl` (gitignored).
+- Verify, on the lab machine from the repo root: `python dreamerv3/eval_stats.py --logdir ./logdir/eval_right_turn_hard`.
+- Not done yet: Step 9 (our runner with the same checkpoint) and Step 10 (real vs imagined BEV).
