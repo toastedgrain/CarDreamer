@@ -123,7 +123,7 @@ Recommended first reproduction target: **`carla_right_turn_hard`** (also used fo
 
 - **Right now I only have a Windows laptop with no NVIDIA GPU.** I work inside **WSL2 (Ubuntu)** with VS Code.
 - **CARLA 0.9.15 and JAX-CUDA training/eval require an NVIDIA GPU.** The paper used a single RTX 4090; README says 10–20 GB GPU memory + ~3 GB for CARLA.
-- **My mentor will give me GPU compute later this week** (probably SSH to a lab machine).
+- **The GPU machine is a shared lab PC running Windows** (RTX 5080, 16 GB), reached through Chrome Remote Desktop or in person. Claude can't run commands on it, so I type them there and paste back the output. See "Phase B on the lab machine" below.
 - Therefore, plan the work in two phases:
   - **Phase A — laptop (no GPU, no CARLA server):** read and document the code, design the module structure and interfaces, write the stage 1–3 code, and test it with **mock data** (e.g. synthetic 128×128 BEV arrays, a fake env that implements the same Gym interface). Nothing in Phase A may require a running CARLA server or a GPU.
   - **Phase B — GPU machine:** install CARLA 0.9.15 + CarDreamer + DreamerV3 deps, evaluate the pretrained `carla_right_turn_hard` checkpoint, compare with the paper, then run our stage 1–3 pipeline against the real environment.
@@ -142,7 +142,25 @@ Recommended first reproduction target: **`carla_right_turn_hard`** (also used fo
   cd dreamerv3 && pip install -r requirements.txt
   pip install "jax[cuda12_pip]==0.4.34" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
   ```
-- Eval command shape: `bash eval_dm3.sh <carla_port> <gpu_id> <checkpoint_path> --task carla_right_turn_hard ...`
+- Eval command shape on a Linux machine: `bash eval_dm3.sh <carla_port> <gpu_id> <checkpoint_path> --task carla_right_turn_hard ...`
+- **Phase B on the lab machine:** CARLA's Windows build runs natively, and everything Python runs in WSL2 Ubuntu-22.04 (`~/projects/CarDreamer/.venv`, Python 3.10, no conda).
+  ```bash
+  # Windows cmd, from C:\Users\Researcher\CARLA\WindowsNoEditor
+  CarlaUE4.exe -RenderOffScreen -carla-port=2000 -benchmark -fps=10
+  # WSL, from the repo root
+  XLA_FLAGS=--xla_gpu_enable_triton_gemm=false PYTHONPATH=. python -u dreamerv3/eval.py --env.world.carla_port 2000 --dreamerv3.jax.policy_devices 0 --dreamerv3.run.from_checkpoint ~/checkpoints/cardreamer/right_turn_hard.ckpt --task carla_right_turn_hard --dreamerv3.logdir ./logdir/eval_right_turn_hard
+  ```
+  - **Set `XLA_FLAGS=--xla_gpu_enable_triton_gemm=false` for anything that builds a float16 agent on this GPU, including our runner.**
+    Why: otherwise jaxlib 0.4.34 aborts while compiling with `Unsupported conversion from f16 to f16` / `LLVM ERROR: Unsupported rounding mode for conversion`. Casting float32 weights to float16 right before a matmul (`nets.py:642-643`) trips XLA's Triton matmul compiler. The flag uses cuBLAS instead. Only tested on the RTX 5080. `jaxagent.py:144` overwrites `XLA_FLAGS` if `jax.logical_cpus` is set, which would drop this flag.
+  - **Run `dreamerv3/eval.py` from the repo root with `PYTHONPATH=.`.**
+    Why: `embodied/replay/prioritized_experience_replay.py:3` imports `dreamerv3.embodied...`, and `flit install --symlink` only links `car_dreamer`, so it fails with `No module named 'dreamerv3'`.
+  - **Don't use `eval_dm3.sh` or `train_dm3.sh` here.**
+    Why: they launch the Linux `CarlaUE4.sh`. Start `CarlaUE4.exe` by hand instead; nothing restarts it if it crashes.
+  - **`C:\Users\Researcher\.wslconfig` must set `networkingMode=mirrored`.**
+    Why: `world_manager.py:38` hard-codes `127.0.0.1`, which only reaches Windows from WSL in mirrored mode.
+  - **Install `tensorflow-cpu==2.13.0` instead of upstream's `tensorflow[and-cuda]`.**
+    Why: `jaxagent.py:132` hides the GPU from TensorFlow anyway, so the GPU build only adds disk use and a second CUDA.
+  - **Differences from upstream's setup, to report alongside results:** Triton matmul off, Windows CARLA, TensorFlow CPU build.
 
 ---
 
