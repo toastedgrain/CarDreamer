@@ -33,6 +33,8 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 | `planner.py` | Stage 3: `act` (actor π → u_nom) and `imagine` (dynamics D + decoder + reward head R, open loop) | 6 | done |
 | `safety_filter.py` | u_nom → u_safe; identity now, CBF later | 6 | done |
 | `runner.py` | `run_episode`: the control loop that wires the stages to `env.step()`, with per-step records | 6 | done |
+| `carla_env.py` | the real CarDreamer env behind the mock's interface: `route_waypoints()` and `ground_truth()`, with `reset`/`step` passed straight through | 9 | written; real-CARLA check pending |
+| `scripts/check_carla_env.py` | one-off check of the adapter on a running CARLA server, without any model | 9 | written; not yet run |
 
 ## Setup (in WSL, once per machine)
 
