@@ -31,13 +31,12 @@ import jax
 import numpy as np
 
 from wm_pipeline.actions import Action
-from wm_pipeline.dreamer_agent import build_agent, import_dreamerv3, load_checkpoint, make_config, run_on_agent_weights
+from wm_pipeline.dreamer_agent import RIGHT_TURN_HARD_SHA256, build_agent, import_dreamerv3, load_checkpoint, make_config, run_on_agent_weights
 from wm_pipeline.encoder import DreamerEncoder, LatentState
 from wm_pipeline.mock_env import MockCarDreamerEnv
 from wm_pipeline.planner import DreamerPlanner
 from wm_pipeline.runner import run_episode
 
-RIGHT_TURN_HARD_SHA256 = "1338b236014f1fca126678cafd058d939adac35910463b1833a37991d3351bbd"
 # The checkpoints were trained with upstream's default precision float16 (see load_checkpoint), so build that way.
 CHECKPOINT_OVERRIDES = {"jax.platform": "cpu", "jax.precision": "float16"}
 ACC_NAMES = {-2.0: "brake", 0.0: "coast", 2.0: "gas"}

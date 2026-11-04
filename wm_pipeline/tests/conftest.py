@@ -1,8 +1,8 @@
 """Fixtures shared by several test files. pytest finds this file by name and injects them by argument name."""
 
-import numpy as np
 import pytest
 
+from wm_pipeline.compare_upstream import upstream_policy_batch
 from wm_pipeline.dreamer_agent import CPU_OVERRIDES, build_agent, make_config
 from wm_pipeline.encoder import DreamerEncoder
 from wm_pipeline.mock_env import MockCarDreamerEnv
@@ -43,16 +43,4 @@ def episode():
 @pytest.fixture(scope="session")
 def upstream_batch():
     """Builds what upstream's BatchEnv hands agent.policy(): every observation key, with a batch dimension of 1."""
-
-    def build(obs, is_first):
-        return {
-            "birdeye_wpt": obs.bev[None],
-            "camera": np.zeros((1, 128, 128, 3), np.uint8),
-            "collision": np.zeros((1, 1), np.float32),
-            "reward": np.zeros(1, np.float32),
-            "is_first": np.array([is_first]),
-            "is_last": np.array([False]),
-            "is_terminal": np.array([False]),
-        }
-
-    return build
+    return upstream_policy_batch

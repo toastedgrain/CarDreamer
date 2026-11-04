@@ -24,6 +24,8 @@ from .observation import BEV_KEY, BEV_SHAPE
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
+RIGHT_TURN_HARD_SHA256 = "1338b236014f1fca126678cafd058d939adac35910463b1833a37991d3351bbd"  # as Hugging Face publishes it
+
 # What tasks.yaml:131-134 sets for every right-turn task: the world model encodes and decodes only the BEV.
 TASK_OVERRIDES = {"encoder.cnn_keys": BEV_KEY, "decoder.cnn_keys": BEV_KEY}
 
