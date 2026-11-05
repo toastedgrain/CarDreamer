@@ -119,3 +119,28 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
 - The metrics are on the lab machine in `logdir/eval_right_turn_hard/metrics.jsonl` (gitignored).
 - Verify, on the lab machine from the repo root: `python dreamerv3/eval_stats.py --logdir ./logdir/eval_right_turn_hard`.
 - Not done yet: Step 9 (our runner with the same checkpoint) and Step 10 (real vs imagined BEV).
+
+### Step 9: our runner on CARLA, compared with upstream's eval (2026-11-05)
+- `wm_pipeline/scripts/run_carla_eval.py` drove 50,000 steps of `carla_right_turn_hard` with our stages 1–3: the CARLA adapter, `Observation`, `DreamerEncoder`, `DreamerPlanner`, the identity safety filter, then `env.step`. It used `right_turn_hard.ckpt`, float16, on the lab machine's GPU.
+- **Check 1, the same action at every step:** upstream's `agent.policy` ran alongside on the same frames with the same seeds. Every latent (deter, stoch, logit) was bit-identical and every action identical. The script stops at the first difference, and it reached its 50,000-step target, so no step differed. A 646-step test run before it also matched at every step.
+- **Check 2, the same results:** both runs are scored by upstream's own `eval_stats.py`.
+
+  | Metric | Upstream eval (Step 8) | Our pipeline | Paper |
+  |---|---|---|---|
+  | Episodes | 289 | 296 | — |
+  | Success | 100.00% ± 0.00% | 99.66% ± 0.34% | 99.58% |
+  | Collision | 0.00% ± 0.00% | 0.34% ± 0.34% (1 episode) | 0.42% |
+  | Out of lane | 0.00% | 0.00% | — |
+  | Avg speed (m/s) | 2.95 ± 0.02 | 2.98 ± 0.02 | 2.92 |
+  | Avg episode length (steps) | 171.30 ± 1.83 | 169.16 ± 1.72 | — |
+  | Avg score | 345.93 ± 0.11 | 343.52 ± 1.76 | — |
+- How to read it:
+  - **The one collision doesn't come from our wrapper.** Check 1 shows our pipeline chose exactly what upstream's policy chooses from the same frame. The two runs saw different traffic: the gap between cross-traffic cars is random (`np.random.uniform` in `carla_wpt_fixed_env.py`), and so is CARLA's traffic manager.
+  - **1 collision in 296 episodes is consistent with 0 in 289.** If both runs had the same true rate, a split like this would be common. It is also close to the paper's 0.42%. The lower average score comes mostly from that episode: the collision penalty, and no destination bonus.
+  - **Speed and episode length differ by about one standard error**, which is normal run-to-run variation. The `±` is the standard error over 3 batches of episodes (see Step 8).
+- The metrics are on the lab machine in `logdir/runner_right_turn_hard/metrics.jsonl` (gitignored).
+- Verify, on the lab machine from the repo root:
+  - `PYTHONPATH=. python wm_pipeline/scripts/run_carla_eval.py --logdir <new dir>` should end with `DONE: all ... matched`.
+  - `python dreamerv3/eval_stats.py --logdir <that dir>` gives the table.
+  - On the laptop, `.venv/bin/pytest wm_pipeline -q` gives 92 passed.
+- Next: Step 10, real vs imagined BEV.

@@ -35,8 +35,8 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 | `runner.py` | `run_episode`: the control loop that wires the stages to `env.step()`, with per-step records | 6 | done |
 | `carla_env.py` | the real CarDreamer env behind the mock's interface: `route_waypoints()` and `ground_truth()`, with `reset`/`step` passed straight through | 9 | done, checked on CARLA |
 | `scripts/check_carla_env.py` | one-off check of the adapter on a running CARLA server, without any model | 9 | done |
-| `compare_upstream.py` | Step 9's comparison: `UpstreamShadow` checks every latent and action against upstream's policy; `episode_metrics` writes the `metrics.jsonl` that upstream's `eval_stats.py` reads | 9 | written; real-CARLA run pending |
-| `scripts/run_carla_eval.py` | runs our pipeline on CARLA with the pretrained checkpoint, using `compare_upstream.py` | 9 | written; not yet run |
+| `compare_upstream.py` | Step 9's comparison: `UpstreamShadow` checks every latent and action against upstream's policy; `episode_metrics` writes the `metrics.jsonl` that upstream's `eval_stats.py` reads | 9 | done, checked on CARLA |
+| `scripts/run_carla_eval.py` | runs our pipeline on CARLA with the pretrained checkpoint, using `compare_upstream.py` | 9 | done |
 
 ## Setup (in WSL, once per machine)
 
