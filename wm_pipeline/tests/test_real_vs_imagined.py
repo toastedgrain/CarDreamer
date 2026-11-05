@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from wm_pipeline.dreamer_agent import TRITON_OFF, avoid_rtx5080_compile_crash
-from wm_pipeline.figures import BLOCK_GAP, ROW_GAP, real_vs_imagined_grid, write_png
+from wm_pipeline.figures import BEV_LEGEND, real_vs_imagined_figure, save_figure, write_png
 from wm_pipeline.mock_env import MockCarDreamerEnv
 from wm_pipeline.real_vs_imagined import RecordingEncoder, compare_with_imagination
 from wm_pipeline.runner import run_episode
@@ -105,17 +105,31 @@ def test_rejects_a_recording_of_another_episode(recorded, planner):
         compare_with_imagination(log, other, planner, start=0, horizon=1)
 
 
-def test_grid_puts_real_above_imagined_for_each_start():
+def test_figure_puts_labeled_real_rows_above_imagined_rows(tmp_path):
     rng = np.random.default_rng(0)
     frames = lambda: rng.integers(0, 256, size=(6, 128, 128, 3), dtype=np.uint8)
-    comparisons = [SimpleNamespace(real=frames(), imagined=frames()) for _ in range(2)]
-    grid = real_vs_imagined_grid(comparisons, every=3)  # shows steps 2 and 5 of each horizon
-    block = 2 * 128 + ROW_GAP
-    assert grid.shape == (2 * block + BLOCK_GAP, 2 * 128, 3)
-    np.testing.assert_array_equal(grid[:128, :128], comparisons[0].real[2])
-    np.testing.assert_array_equal(grid[128 + ROW_GAP : block, 128:], comparisons[0].imagined[5])
-    np.testing.assert_array_equal(grid[block + BLOCK_GAP : block + BLOCK_GAP + 128, :128], comparisons[1].real[2])
-    assert (grid[block : block + BLOCK_GAP] == 255).all()
+    comparisons = [
+        SimpleNamespace(start=start, real=frames(), imagined=frames(), model_error=np.arange(6.0), no_change_error=np.arange(6.0) + 10)
+        for start in (20, 60)
+    ]
+    figure = real_vs_imagined_figure(comparisons, every=3, seconds_per_step=0.1, title="a title")  # shows steps 2 and 5
+    axes = figure.axes
+    assert len(axes) == 2 * 2 * 2  # 2 starts x (real, imagined) x 2 columns
+    # Row-major: real row of start 20, its imagined row, then start 60's two rows.
+    np.testing.assert_array_equal(axes[0].images[0].get_array(), comparisons[0].real[2])
+    np.testing.assert_array_equal(axes[3].images[0].get_array(), comparisons[0].imagined[5])
+    np.testing.assert_array_equal(axes[4].images[0].get_array(), comparisons[1].real[2])
+    assert [ax.get_title() for ax in axes[:2]] == ["+0.3 s", "+0.6 s"]
+    assert axes[4].get_title() == ""  # times only along the top
+    assert axes[0].get_ylabel() == "step 20\n(2.0 s)\nreal"
+    assert axes[2].get_ylabel() == "imagined"
+    assert axes[3].get_xlabel() == "5.0 | 15.0"  # under the imagined frame: model error | no-motion error at step 5
+    assert figure._suptitle.get_text() == "a title"
+    assert any(BEV_LEGEND in text.get_text() for text in figure.texts)
+
+    path = tmp_path / "figure.png"
+    save_figure(figure, path)
+    assert path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
 
 
 def test_write_png_round_trips(tmp_path):

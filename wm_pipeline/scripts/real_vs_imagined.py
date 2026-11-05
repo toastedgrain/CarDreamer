@@ -7,8 +7,8 @@ Needs a running CARLA server.
 
 It drives one episode of carla_right_turn_hard with our pipeline and the pretrained checkpoint. From each start step,
 the world model imagines the next 3 s under the actions the car actually took, without seeing any more frames.
-In the figure, each pair of rows is one start step: the real BEV on top and the imagined one below, every 0.3 s from
-0.3 s to 3.0 s after the start.
+The figure is labeled: each pair of rows is one start step, the real BEV on top and the imagined one below, every
+0.6 s from 0.6 s to 3.0 s after the start. The printed table has the same columns.
 """
 
 import argparse
@@ -18,12 +18,17 @@ from pathlib import Path
 from wm_pipeline.carla_env import make_carla_env
 from wm_pipeline.dreamer_agent import RIGHT_TURN_HARD_SHA256, avoid_rtx5080_compile_crash, build_agent, load_checkpoint, make_config
 from wm_pipeline.encoder import DreamerEncoder
-from wm_pipeline.figures import real_vs_imagined_grid, write_png
+from wm_pipeline.figures import real_vs_imagined_figure, save_figure
 from wm_pipeline.planner import DreamerPlanner
 from wm_pipeline.real_vs_imagined import RecordingEncoder, compare_with_imagination
 from wm_pipeline.runner import run_episode
 
 SECONDS_PER_STEP = 0.1  # fixed_delta_seconds in common.yaml
+TITLE = (
+    "Real vs imagined BEV: carla_right_turn_hard, pretrained CarDreamer checkpoint\n"
+    "At each start step the world model sees the real frame,\n"
+    "then imagines ahead from the executed actions alone"
+)
 
 
 def main():
@@ -33,7 +38,7 @@ def main():
     parser.add_argument("--sha256", default=RIGHT_TURN_HARD_SHA256)
     parser.add_argument("--starts", type=int, nargs="+", default=[20, 60, 100], help="the steps to imagine from")
     parser.add_argument("--horizon", type=int, default=30, help="steps to imagine: 30 = 3 s")
-    parser.add_argument("--every", type=int, default=3, help="show every n-th imagined step in the figure")
+    parser.add_argument("--every", type=int, default=6, help="show every n-th imagined step: 6 = every 0.6 s, 5 columns")
     parser.add_argument("--port", type=int, default=2000)
     args = parser.parse_args()
 
@@ -65,8 +70,8 @@ def main():
         raise SystemExit("the episode was too short for every start step; try smaller --starts")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    write_png(args.out, real_vs_imagined_grid(comparisons, args.every))
-    print(f"saved {args.out}: starts {[c.start for c in comparisons]}, real on top and imagined below in each pair of rows")
+    save_figure(real_vs_imagined_figure(comparisons, args.every, SECONDS_PER_STEP, TITLE), args.out)
+    print(f"saved {args.out} ({args.out.stat().st_size / 1e3:.0f} KB): starts {[c.start for c in comparisons]}")
 
 
 if __name__ == "__main__":
