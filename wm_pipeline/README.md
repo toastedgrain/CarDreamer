@@ -37,9 +37,9 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 | `scripts/check_carla_env.py` | one-off check of the adapter on a running CARLA server, without any model | 9 | done |
 | `compare_upstream.py` | Step 9's comparison: `UpstreamShadow` checks every latent and action against upstream's policy; `episode_metrics` writes the `metrics.jsonl` that upstream's `eval_stats.py` reads | 9 | done, checked on CARLA |
 | `scripts/run_carla_eval.py` | runs our pipeline on CARLA with the pretrained checkpoint, using `compare_upstream.py` | 9 | done |
-| `real_vs_imagined.py` | Step 10: `RecordingEncoder` keeps an episode's BEVs and latents; `compare_with_imagination` imagines H steps from one of them under the executed actions and lines the result up with the real BEVs | 10 | written; real-CARLA run pending |
+| `real_vs_imagined.py` | Step 10: `RecordingEncoder` keeps an episode's BEVs and latents; `compare_with_imagination` imagines H steps from one of them under the executed actions and lines the result up with the real BEVs | 10 | done, checked on CARLA |
 | `figures.py` | `write_png` (standard library only) and the labeled real-vs-imagined figure (matplotlib), saved under 500 KB for GitHub | 10 | done |
-| `scripts/real_vs_imagined.py` | drives one CARLA episode and saves the real-vs-imagined figure, with per-step pixel errors | 10 | written; not yet run |
+| `scripts/real_vs_imagined.py` | drives one CARLA episode and saves the real-vs-imagined figure, with per-step pixel errors | 10 | done |
 
 ## Setup (in WSL, once per machine)
 

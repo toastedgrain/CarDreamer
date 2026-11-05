@@ -144,3 +144,29 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
   - `python dreamerv3/eval_stats.py --logdir <that dir>` gives the table.
   - On the laptop, `.venv/bin/pytest wm_pipeline -q` gives 92 passed.
 - Next: Step 10, real vs imagined BEV.
+
+### Step 10: real vs imagined BEV on CARLA (2026-11-05)
+- `wm_pipeline/scripts/real_vs_imagined.py` drove one episode of `carla_right_turn_hard` with our pipeline and the pretrained checkpoint: 168 steps, destination reached. From steps 20 (approaching the junction), 60 (turning) and 100 (after the turn, in the cross-traffic lane), the world model imagined 3 s ahead. It started from the latent x_t and was given only the actions the car actually took, with no frames after the start.
+
+  ![Real vs imagined BEV](figures/real_vs_imagined_right_turn_hard.png)
+
+- Mean pixel difference from the real BEV (0–255, lower is better). "No-move" is the error of guessing that nothing changes after the start frame.
+
+  | Start step | | +0.6 s | +1.2 s | +1.8 s | +2.4 s | +3.0 s |
+  |---|---|---|---|---|---|---|
+  | 20 (approach) | model | 3.6 | 5.4 | 7.8 | 11.6 | 12.6 |
+  | | no-move | 8.7 | 20.6 | 20.5 | 26.4 | 30.0 |
+  | 60 (turning) | model | 5.1 | 6.4 | 7.4 | 9.1 | 9.5 |
+  | | no-move | 25.0 | 32.9 | 35.3 | 36.8 | 35.3 |
+  | 100 (after the turn) | model | 7.1 | 10.2 | 10.8 | 13.9 | 13.7 |
+  | | no-move | 33.0 | 37.4 | 39.7 | 43.3 | 43.8 |
+
+- How to read it:
+  - **The model beats the no-move guess at every start and every horizon** (at 3.0 s: 12.6 vs 30.0, 9.5 vs 35.3, 13.7 vs 43.8). So it predicts how the scene moves; it isn't just repeating the last frame.
+  - **Its error grows with the horizon**, as expected when imagining with no new frames.
+  - **What it gets right:** the road layout turning with the ego, the route, the cross-traffic lane and the other cars' planned paths.
+  - **What it gets wrong:** the exact positions and timing of other cars, clearest in the step 20 rows. The flow spawns cars at random gaps, so cars that appear after the start frame are probably partly unpredictable from the BEV.
+  - **The error is averaged over the whole image,** most of which is static road. So compare the model against no-move, not against 0.
+  - **This is one episode with three start points:** a sanity check, not a measurement. An earlier run the same day showed the same picture: the model below no-move everywhere, with one brief spike (21.8 at +2.4 s from step 20).
+- Verify, on the lab machine from the repo root: `PYTHONPATH=. python wm_pipeline/scripts/real_vs_imagined.py --out <file>.png`. A new episode gives different numbers. On the laptop, `.venv/bin/pytest wm_pipeline -q` gives 100 passed.
+- Phase B Steps 8–10 are done.
