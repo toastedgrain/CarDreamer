@@ -10,6 +10,7 @@ imports tensorflow (several seconds), and `import wm_pipeline` should stay light
 
 import hashlib
 import io
+import os
 import pathlib
 import pickle
 import sys
@@ -25,6 +26,18 @@ from .observation import BEV_KEY, BEV_SHAPE
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 RIGHT_TURN_HARD_SHA256 = "1338b236014f1fca126678cafd058d939adac35910463b1833a37991d3351bbd"  # as Hugging Face publishes it
+
+TRITON_OFF = "--xla_gpu_enable_triton_gemm=false"
+
+
+def avoid_rtx5080_compile_crash() -> None:
+    """
+    Turn off XLA's Triton matmuls: on the lab's RTX 5080, jaxlib 0.4.34 aborts compiling a float16 agent without this
+    (CLAUDE.md section 4). Call it before building the agent: XLA reads XLA_FLAGS when JAX first uses the GPU.
+    """
+    flags = os.environ.get("XLA_FLAGS", "")
+    if TRITON_OFF not in flags:
+        os.environ["XLA_FLAGS"] = f"{flags} {TRITON_OFF}".strip()
 
 # What tasks.yaml:131-134 sets for every right-turn task: the world model encodes and decodes only the BEV.
 TASK_OVERRIDES = {"encoder.cnn_keys": BEV_KEY, "decoder.cnn_keys": BEV_KEY}

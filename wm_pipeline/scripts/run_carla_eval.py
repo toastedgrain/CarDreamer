@@ -11,17 +11,14 @@ It stops at the first step where our latent or action differs from upstream's. C
 """
 
 import argparse
-import os
 import warnings
 from pathlib import Path
 
 from wm_pipeline.carla_env import make_carla_env
 from wm_pipeline.compare_upstream import run_comparison
-from wm_pipeline.dreamer_agent import RIGHT_TURN_HARD_SHA256, build_agent, load_checkpoint, make_config
+from wm_pipeline.dreamer_agent import RIGHT_TURN_HARD_SHA256, avoid_rtx5080_compile_crash, build_agent, load_checkpoint, make_config
 from wm_pipeline.encoder import DreamerEncoder
 from wm_pipeline.planner import DreamerPlanner
-
-TRITON_OFF = "--xla_gpu_enable_triton_gemm=false"
 
 
 def main():
@@ -33,11 +30,7 @@ def main():
     parser.add_argument("--port", type=int, default=2000)
     args = parser.parse_args()
 
-    # The RTX 5080 crashes compiling a float16 model without this (CLAUDE.md section 4). XLA reads it when JAX first
-    # uses the GPU, which is inside build_agent, so setting it here is early enough.
-    flags = os.environ.get("XLA_FLAGS", "")
-    if TRITON_OFF not in flags:
-        os.environ["XLA_FLAGS"] = f"{flags} {TRITON_OFF}".strip()
+    avoid_rtx5080_compile_crash()
     # The warning upstream's eval.py:11 silences: int64 seeds are truncated to int32 for JAX's random keys.
     warnings.filterwarnings("ignore", ".*truncated to dtype int32.*")
 

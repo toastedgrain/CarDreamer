@@ -21,10 +21,8 @@ This folder has no __init__.py on purpose: the smoke test imports every package 
 
 import argparse
 import collections
-import struct
 import time
 import warnings
-import zlib
 from pathlib import Path
 
 import jax
@@ -33,6 +31,7 @@ import numpy as np
 from wm_pipeline.actions import Action
 from wm_pipeline.dreamer_agent import RIGHT_TURN_HARD_SHA256, build_agent, import_dreamerv3, load_checkpoint, make_config, run_on_agent_weights
 from wm_pipeline.encoder import DreamerEncoder, LatentState
+from wm_pipeline.figures import write_png
 from wm_pipeline.mock_env import MockCarDreamerEnv
 from wm_pipeline.planner import DreamerPlanner
 from wm_pipeline.runner import run_episode
@@ -68,18 +67,6 @@ def dream(agent, steps: int, seed: int):
         frames.append(step.bev[0])
         actions.append(u)
     return frames, actions
-
-
-def write_png(path: Path, rgb: np.ndarray) -> None:
-    """Minimal RGB PNG writer (standard library only, so no image package is needed)."""
-    height, width, _ = rgb.shape
-    rows = b"".join(b"\x00" + np.ascontiguousarray(rgb[y]).tobytes() for y in range(height))
-
-    def chunk(tag, payload):
-        return struct.pack(">I", len(payload)) + tag + payload + struct.pack(">I", zlib.crc32(tag + payload) & 0xFFFFFFFF)
-
-    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
-    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b""))
 
 
 def main():
