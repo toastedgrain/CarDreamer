@@ -33,10 +33,10 @@ Nothing in this folder is upstream CarDreamer code, and upstream folders (`car_d
 | `planner.py` | Stage 3: `act` (actor π → u_nom) and `imagine` (dynamics D + decoder + reward head R, open loop) | 6 | done |
 | `safety_filter.py` | u_nom → u_safe; identity now, CBF later | 6 | done |
 | `runner.py` | `run_episode`: the control loop that wires the stages to `env.step()`, with per-step records | 6 | done |
-| `carla_env.py` | the real CarDreamer env behind the mock's interface: `route_waypoints()` and `ground_truth()`, with `reset`/`step` passed straight through | 9 | done, checked on CARLA |
-| `scripts/check_carla_env.py` | one-off check of the adapter on a running CARLA server, without any model | 9 | done |
+| `carla_env.py` | the real CarDreamer env behind the mock's interface: `route_waypoints()` and `ground_truth()`, with `reset`/`step` passed straight through; `action_config` holds the task's own steer values | 9 | done, checked on CARLA (right turn) |
+| `scripts/check_carla_env.py` | one-off check of the adapter on a running CARLA server, without any model (`--task`) | 9 | done |
 | `compare_upstream.py` | Step 9's comparison: `UpstreamShadow` checks every latent and action against upstream's policy; `episode_metrics` writes the `metrics.jsonl` that upstream's `eval_stats.py` reads | 9 | done, checked on CARLA |
-| `scripts/run_carla_eval.py` | runs our pipeline on CARLA with the pretrained checkpoint, using `compare_upstream.py` | 9 | done |
+| `scripts/run_carla_eval.py` | runs our pipeline on CARLA with a pretrained checkpoint, using `compare_upstream.py`; `--task` picks right turn hard, left turn hard, lane merge or navigation | 9, 11 | done; other tasks not yet run on CARLA |
 | `real_vs_imagined.py` | Step 10: `RecordingEncoder` keeps an episode's BEVs and latents; `compare_with_imagination` imagines H steps from one of them under the executed actions and lines the result up with the real BEVs | 10 | done, checked on CARLA |
 | `figures.py` | `write_png` (standard library only) and the labeled real-vs-imagined figure (matplotlib), saved under 500 KB for GitHub | 10 | done |
 | `scripts/real_vs_imagined.py` | drives one CARLA episode and saves the real-vs-imagined figure, with per-step pixel errors | 10 | done |

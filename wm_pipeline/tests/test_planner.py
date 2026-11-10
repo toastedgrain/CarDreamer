@@ -5,8 +5,9 @@ import copy
 import numpy as np
 import pytest
 
-from wm_pipeline.actions import Action
+from wm_pipeline.actions import Action, ActionConfig, decode_action
 from wm_pipeline.dreamer_agent import draw_seed
+from wm_pipeline.planner import DreamerPlanner
 
 # The warning upstream's eval.py:11 silences: int64 seeds are truncated to int32 for JAX's random keys.
 pytestmark = pytest.mark.filterwarnings("ignore:.*truncated to dtype int32.*")
@@ -35,6 +36,23 @@ def test_act_with_the_same_seed_gives_the_same_action(planner, x0):
 def test_act_samples_from_a_distribution(planner, x0):
     # A random-weight actor is close to uniform over the 15 actions, so 20 seeds will not all pick the same one.
     assert len({planner.act(x0, seed=s).index for s in range(20)}) > 1
+
+
+def test_act_labels_the_same_choice_with_the_given_steer_values(agent, planner, x0):
+    # common.yaml's set, which left turn, lane merge and navigation use; the `planner` fixture has right turn's.
+    default_steer = ActionConfig(discrete_steer=(-0.6, -0.2, 0.0, 0.2, 0.6))
+    other = DreamerPlanner(agent, action_config=default_steer)
+    for seed in range(5):
+        u_right_turn, u = planner.act(x0, seed=seed), other.act(x0, seed=seed)
+        assert u.index == u_right_turn.index  # the actor never sees the steer values, only the 15 indices
+        assert (u.acc, u.steer) == decode_action(u.index, default_steer)
+
+
+def test_action_values_that_dont_fit_the_actor_are_refused(agent):
+    with pytest.raises(ValueError, match="15 discrete actions"):
+        DreamerPlanner(agent, action_config=ActionConfig(discrete_steer=(0.0, 0.3)))  # 3 x 2 = 6 actions
+    with pytest.raises(ValueError, match="15 discrete actions"):
+        DreamerPlanner(agent, action_config=ActionConfig(discrete=False))
 
 
 def test_encoder_and_planner_match_upstream_policy_over_two_steps(agent, episode, encoder, planner, upstream_batch):

@@ -44,10 +44,13 @@ class Imagination:
 class DreamerPlanner:
     """pi and D of a DreamerV3 agent: the nominal action, and imagined futures."""
 
-    def __init__(self, agent, rng: Optional[np.random.Generator] = None):
+    def __init__(self, agent, rng: Optional[np.random.Generator] = None, action_config: ActionConfig = ActionConfig()):
         """
         :param agent: a dreamerv3.Agent, e.g. from dreamer_agent.build_agent().
         :param rng: where random seeds come from when act() or imagine() is not given one.
+        :param action_config: the task's action values, used to label u_nom with its (acc, steer). On CARLA pass the
+            env's (CarDreamerEnvAdapter.action_config): right turn steers +-0.9/+-0.3, left turn, lane merge and
+            navigation +-0.6/+-0.2. The actor picks the same index either way; only the label would be wrong.
         """
         _, _, nj = import_dreamerv3()
         model = agent.agent  # the ninjax module whose methods upstream's policy calls
@@ -56,9 +59,11 @@ class DreamerPlanner:
         # Every pretrained CarDreamer checkpoint uses the 15 discrete actions; a continuous actor would need training.
         if not model.act_space.discrete or model.act_space.shape != (ActionConfig().n_actions,):
             raise NotImplementedError(f"DreamerPlanner needs the 15-action discrete space, got {model.act_space}")
+        if not action_config.discrete or action_config.n_actions != model.act_space.shape[0]:
+            raise ValueError(f"the actor has {model.act_space.shape[0]} discrete actions, but action_config is {action_config}")
         self._agent = agent
         self._rng = rng if rng is not None else np.random.default_rng(0)
-        self._action_config = ActionConfig()
+        self._action_config = action_config
 
         def act_step(latent):
             # Upstream's policy call takes its random keys from one step seed in this order: key 1 for the prior

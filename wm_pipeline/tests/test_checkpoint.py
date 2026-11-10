@@ -10,10 +10,33 @@ import jax
 import numpy as np
 import pytest
 
-from wm_pipeline.dreamer_agent import CPU_OVERRIDES, build_agent, load_checkpoint, make_config
+from ruamel import yaml
+
+from wm_pipeline.dreamer_agent import (
+    CPU_OVERRIDES,
+    PRETRAINED_CHECKPOINTS,
+    REPO_ROOT,
+    RIGHT_TURN_HARD_SHA256,
+    build_agent,
+    load_checkpoint,
+    make_config,
+)
+from wm_pipeline.observation import BEV_KEY
 
 # The warning upstream's eval.py:11 silences: int64 seeds are truncated to int32 for JAX's random keys.
 pytestmark = pytest.mark.filterwarnings("ignore:.*truncated to dtype int32.*")
+
+
+def test_every_pretrained_task_gives_the_agent_build_agent_makes():
+    """build_agent hard-codes one set of spaces for all these tasks; check tasks.yaml agrees for each of them."""
+    tasks = yaml.YAML(typ="safe").load((REPO_ROOT / "car_dreamer" / "configs" / "tasks.yaml").read_text())
+    for task, (file_name, sha256) in PRETRAINED_CHECKPOINTS.items():
+        assert tasks[task]["env"]["observation.enabled"] == ["camera", "collision", "birdeye_wpt"], task
+        assert tasks[task]["env"].get("action", {}).get("discrete", True), task  # common.yaml: discrete: True
+        assert tasks[task]["dreamerv3"]["encoder.cnn_keys"] == BEV_KEY, task
+        assert tasks[task]["dreamerv3"]["decoder.cnn_keys"] == BEV_KEY, task
+        assert file_name.endswith(".ckpt") and len(sha256) == 64 and set(sha256) <= set("0123456789abcdef"), task
+    assert PRETRAINED_CHECKPOINTS["carla_right_turn_hard"][1] == RIGHT_TURN_HARD_SHA256
 
 
 @pytest.fixture(scope="module")

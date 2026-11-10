@@ -25,7 +25,16 @@ from .observation import BEV_KEY, BEV_SHAPE
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-RIGHT_TURN_HARD_SHA256 = "1338b236014f1fca126678cafd058d939adac35910463b1833a37991d3351bbd"  # as Hugging Face publishes it
+# The pretrained checkpoints we evaluate: task name -> (file in ucd-dare/CarDreamer's CarDreamer_checkpoints/ on
+# Hugging Face, the SHA-256 Hugging Face publishes for it). Every file there is 370,989,588 bytes, the same as
+# right_turn_hard.ckpt, which suggests the same `small` model; load_checkpoint checks each entry when one is loaded.
+PRETRAINED_CHECKPOINTS = {
+    "carla_right_turn_hard": ("right_turn_hard.ckpt", "1338b236014f1fca126678cafd058d939adac35910463b1833a37991d3351bbd"),
+    "carla_left_turn_hard": ("left_turn_hard.ckpt", "72e5fc2639f3e72ba946b2ba1632981d6f3df3255b5cb06271aa8cb4ae677774"),
+    "carla_lane_merge": ("lane_merge.ckpt", "2419c65472c770d34cbe26c8feb6983abe46f5d7ac25ea3810575cc1ab8cfc3b"),
+    "carla_navigation": ("navigation.ckpt", "d33728c22dc694a44538cf0400643b68ab2539d5d392e20ba167faea23585611"),
+}
+RIGHT_TURN_HARD_SHA256 = PRETRAINED_CHECKPOINTS["carla_right_turn_hard"][1]
 
 TRITON_OFF = "--xla_gpu_enable_triton_gemm=false"
 
@@ -39,7 +48,8 @@ def avoid_rtx5080_compile_crash() -> None:
     if TRITON_OFF not in flags:
         os.environ["XLA_FLAGS"] = f"{flags} {TRITON_OFF}".strip()
 
-# What tasks.yaml:131-134 sets for every right-turn task: the world model encodes and decodes only the BEV.
+# What tasks.yaml sets for every task in PRETRAINED_CHECKPOINTS (e.g. tasks.yaml:131-134 for right turn): the world
+# model encodes and decodes only the BEV. tests/test_checkpoint.py checks this against tasks.yaml.
 TASK_OVERRIDES = {"encoder.cnn_keys": BEV_KEY, "decoder.cnn_keys": BEV_KEY}
 
 # Phase A runs on the laptop CPU in full precision. Upstream's defaults are jax.platform "gpu" and
@@ -61,7 +71,7 @@ def import_dreamerv3():
 
 
 def make_config(size: str = "small", overrides: dict = None):
-    """dreamerv3.yaml defaults + a model size + the right-turn task overrides, as in eval.py:109-118."""
+    """dreamerv3.yaml defaults + a model size + the task overrides above, as in eval.py:109-118."""
     from ruamel import yaml
 
     dreamerv3, embodied, _ = import_dreamerv3()
@@ -73,11 +83,13 @@ def make_config(size: str = "small", overrides: dict = None):
 
 def build_agent(config):
     """
-    A DreamerV3 agent with the observation and action spaces upstream's eval gives it for the right-turn tasks
-    (discrete actions). Its weights are randomly initialized; Phase B loads a checkpoint into it.
+    A DreamerV3 agent with the observation and action spaces upstream's eval gives it for the tasks in
+    PRETRAINED_CHECKPOINTS (discrete actions). Its weights are randomly initialized; Phase B loads a checkpoint into it.
     """
     dreamerv3, embodied, _ = import_dreamerv3()
-    # The spaces dreamerv3/embodied/envs/from_gym.py:27-48 produces from the right-turn env.
+    # The spaces dreamerv3/embodied/envs/from_gym.py:27-48 produces from those envs. They are the same for all of them:
+    # each observes [camera, collision, birdeye_wpt] and has 3 x 5 = 15 discrete actions (only the steer values differ,
+    # and the agent never sees those).
     obs_space = {
         BEV_KEY: embodied.Space(np.uint8, BEV_SHAPE),
         "camera": embodied.Space(np.uint8, (128, 128, 3)),

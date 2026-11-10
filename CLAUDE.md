@@ -131,7 +131,7 @@ Recommended first reproduction target: **`carla_right_turn_hard`** (also used fo
 - **Importing `dreamerv3` requires TensorFlow**, even though all model math is JAX: `embodied/replay/__init__.py` → `base_prioritized_reverb.py:8` imports it at module top. Don't try to drop TensorFlow from an environment that imports DreamerV3.
 - **Building a DreamerV3 agent sets JAX's transfer guard to "disallow" for the whole process** (`dreamerv3/jaxagent.py:148`). Any of our code running alongside it must move arrays with `jax.device_put` / `jax.device_get`; `np.asarray(jax_array)` or passing numpy straight into a jitted function will raise.
 - **Building an agent also sets the compute precision for the whole process** (`jaxutils.COMPUTE_DTYPE`, `jaxagent.py:151`). Never mix float16 and float32 agents in one Python process, e.g. in the test suite, which uses float32 `xsmall` agents.
-- **Pretrained checkpoints** (`huggingface.co/ucd-dare/CarDreamer`, 371 MB each; `right_turn_hard.ckpt` is in WSL `~/checkpoints/cardreamer/`, outside the repo) are **pickles**, so plain `pickle.load` or upstream's `Checkpoint.load` can run code hidden in the file. In our code, load them only with `wm_pipeline.dreamer_agent.load_checkpoint` (restricted unpickler).
+- **Pretrained checkpoints** (`huggingface.co/ucd-dare/CarDreamer`, 371 MB each; kept in WSL `~/checkpoints/cardreamer/`, outside the repo; the ones we use, with their SHA-256s, are listed in `wm_pipeline.dreamer_agent.PRETRAINED_CHECKPOINTS`) are **pickles**, so plain `pickle.load` or upstream's `Checkpoint.load` can run code hidden in the file. In our code, load them only with `wm_pipeline.dreamer_agent.load_checkpoint` (restricted unpickler).
   They were trained with `jax.precision: float16`, which adds loss-scaling optimizer state, so build the agent with float16 to load them.
 - Upstream install (for Phase B, from the CarDreamer README):
   ```bash
@@ -152,6 +152,7 @@ Recommended first reproduction target: **`carla_right_turn_hard`** (also used fo
   ```
   - **Set `XLA_FLAGS=--xla_gpu_enable_triton_gemm=false` for anything that builds a float16 agent on this GPU, including our runner.**
     Why: otherwise jaxlib 0.4.34 aborts while compiling with `Unsupported conversion from f16 to f16` / `LLVM ERROR: Unsupported rounding mode for conversion`. Casting float32 weights to float16 right before a matmul (`nets.py:642-643`) trips XLA's Triton matmul compiler. The flag uses cuBLAS instead. Only tested on the RTX 5080. `jaxagent.py:144` overwrites `XLA_FLAGS` if `jax.logical_cpus` is set, which would drop this flag.
+  - **Our runner takes `--task`:** `PYTHONPATH=. python wm_pipeline/scripts/run_carla_eval.py --task <task> --logdir <dir>` for any task in `PRETRAINED_CHECKPOINTS`, then `python dreamerv3/eval_stats.py --logdir <dir>`. Pass the env's `action_config` to `DreamerPlanner`, or u_nom gets labeled with right turn's steer values.
   - **Run `dreamerv3/eval.py` from the repo root with `PYTHONPATH=.`.**
     Why: `embodied/replay/prioritized_experience_replay.py:3` imports `dreamerv3.embodied...`, and `flit install --symlink` only links `car_dreamer`, so it fails with `No module named 'dreamerv3'`.
   - **Don't use `eval_dm3.sh` or `train_dm3.sh` here.**

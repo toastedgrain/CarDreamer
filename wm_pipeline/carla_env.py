@@ -29,15 +29,15 @@ class CarDreamerEnvAdapter:
         # silently find no terminal flags.
         if config.eval:
             raise ValueError("env.eval must be False: it renames the info keys the runner reads")
-        # DreamerPlanner decodes actions with the right-turn values. Under another steer set the env would still
-        # execute the right index, but u_nom's logged (acc, steer) would be wrong, and so would a CBF reading them.
+        # This task's action values, read from its merged config: right turn overrides the steer set to +-0.9/+-0.3
+        # (tasks.yaml:122-123), while left turn, lane merge and navigation keep common.yaml's +-0.6/+-0.2. Give them
+        # to DreamerPlanner: the env executes the index either way, but with another task's values u_nom's logged
+        # (acc, steer) would be wrong, and so would a CBF reading them.
         self.action_config = ActionConfig(
             discrete=bool(config.action.discrete),
             discrete_acc=tuple(config.action.discrete_acc),
             discrete_steer=tuple(config.action.discrete_steer),
         )
-        if self.action_config != ActionConfig():
-            raise ValueError(f"expected the right-turn discrete actions {ActionConfig()}, but this task has {self.action_config}")
         self._was_reset = False
 
     def reset(self) -> Dict[str, np.ndarray]:

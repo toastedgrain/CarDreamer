@@ -9,8 +9,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from wm_pipeline.actions import decode_action
 from wm_pipeline.carla_env import CarDreamerEnvAdapter, make_carla_env
 from wm_pipeline.observation import make_observation
+from wm_pipeline.planner import DreamerPlanner
 from wm_pipeline.runner import run_episode
 
 # The warning upstream's eval.py:11 silences: int64 seeds are truncated to int32 for JAX's random keys.
@@ -165,10 +167,19 @@ def test_reading_before_reset_fails_clearly():
         adapter.ground_truth()
 
 
-def test_rejects_a_task_with_other_steer_values():
-    # common.yaml's default set, which left turn and lane merge use: our planner would label those actions wrongly.
-    with pytest.raises(ValueError, match="right-turn"):
-        _adapter(action=DEFAULT_ACTION)
+def test_reads_each_tasks_own_action_values():
+    assert _adapter()[0].action_config.discrete_steer == (-0.9, -0.3, 0.0, 0.3, 0.9)  # right turn's override
+    # common.yaml's default set, which left turn, lane merge and navigation keep.
+    assert _adapter(action=DEFAULT_ACTION)[0].action_config.discrete_steer == (-0.6, -0.2, 0.0, 0.2, 0.6)
+
+
+def test_runner_labels_actions_with_the_tasks_steer_values(agent, encoder):
+    adapter, base = _adapter(action=DEFAULT_ACTION, episode_length=3)
+    log = run_episode(adapter, encoder, DreamerPlanner(agent, action_config=adapter.action_config), seed=0)
+    assert base.executed == [step.u_safe.env_action for step in log.steps]
+    for step in log.steps:
+        assert (step.u_nom.acc, step.u_nom.steer) == decode_action(step.u_nom.index, adapter.action_config)
+        assert step.u_nom.steer in DEFAULT_ACTION.discrete_steer
 
 
 def test_rejects_eval_mode_because_it_renames_the_info_keys():
