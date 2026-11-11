@@ -35,6 +35,7 @@ PRETRAINED_CHECKPOINTS = {
     "carla_navigation": ("navigation.ckpt", "d33728c22dc694a44538cf0400643b68ab2539d5d392e20ba167faea23585611"),
 }
 RIGHT_TURN_HARD_SHA256 = PRETRAINED_CHECKPOINTS["carla_right_turn_hard"][1]
+CHECKPOINT_DIR = pathlib.Path("~/checkpoints/cardreamer")  # where we keep them, outside the repo (CLAUDE.md section 4)
 
 TRITON_OFF = "--xla_gpu_enable_triton_gemm=false"
 

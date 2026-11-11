@@ -19,11 +19,16 @@ from pathlib import Path
 
 from wm_pipeline.carla_env import make_carla_env
 from wm_pipeline.compare_upstream import run_comparison
-from wm_pipeline.dreamer_agent import PRETRAINED_CHECKPOINTS, avoid_rtx5080_compile_crash, build_agent, load_checkpoint, make_config
+from wm_pipeline.dreamer_agent import (
+    CHECKPOINT_DIR,
+    PRETRAINED_CHECKPOINTS,
+    avoid_rtx5080_compile_crash,
+    build_agent,
+    load_checkpoint,
+    make_config,
+)
 from wm_pipeline.encoder import DreamerEncoder
 from wm_pipeline.planner import DreamerPlanner
-
-CHECKPOINT_DIR = Path("~/checkpoints/cardreamer")
 
 
 def main():

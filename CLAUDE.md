@@ -153,6 +153,10 @@ Recommended first reproduction target: **`carla_right_turn_hard`** (also used fo
   - **Set `XLA_FLAGS=--xla_gpu_enable_triton_gemm=false` for anything that builds a float16 agent on this GPU, including our runner.**
     Why: otherwise jaxlib 0.4.34 aborts while compiling with `Unsupported conversion from f16 to f16` / `LLVM ERROR: Unsupported rounding mode for conversion`. Casting float32 weights to float16 right before a matmul (`nets.py:642-643`) trips XLA's Triton matmul compiler. The flag uses cuBLAS instead. Only tested on the RTX 5080. `jaxagent.py:144` overwrites `XLA_FLAGS` if `jax.logical_cpus` is set, which would drop this flag.
   - **Our runner takes `--task`:** `PYTHONPATH=. python wm_pipeline/scripts/run_carla_eval.py --task <task> --logdir <dir>` for any task in `PRETRAINED_CHECKPOINTS`, then `python dreamerv3/eval_stats.py --logdir <dir>`. Pass the env's `action_config` to `DreamerPlanner`, or u_nom gets labeled with right turn's steer values.
+  - **`wm_pipeline/scripts/eval_and_push.sh` runs several tasks unattended** and commits + pushes each one's results (`notes/results/<tag>/<task>/`) as it finishes, through the Windows mirror.
+  - **Never run `git.exe push origin` in `C:\Users\Researcher\CarDreamer.git`; push by URL** (`git.exe -C <mirror> push https://github.com/toastedgrain/CarDreamer.git dev`).
+    Why: it is a `clone --mirror`, so `remote.origin.mirror` is true and a push to `origin` mirrors every ref, deleting any GitHub branch the mirror doesn't have.
+  - **Don't name result files `*.log` inside the repo.** Why: `.gitignore:12` ignores them, and `git add <dir>` skips them silently.
   - **Run `dreamerv3/eval.py` from the repo root with `PYTHONPATH=.`.**
     Why: `embodied/replay/prioritized_experience_replay.py:3` imports `dreamerv3.embodied...`, and `flit install --symlink` only links `car_dreamer`, so it fails with `No module named 'dreamerv3'`.
   - **Don't use `eval_dm3.sh` or `train_dm3.sh` here.**
