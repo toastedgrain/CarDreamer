@@ -14,6 +14,9 @@ It stops at the first step where our latent or action differs from upstream's. C
 """
 
 import argparse
+import os
+import sys
+import traceback
 import warnings
 from pathlib import Path
 
@@ -64,4 +67,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # CarDreamer's env starts its monitor web server in a non-daemon thread that never ends
+    # (car_dreamer/toolkit/monitor/monitor.py:17), so a normal exit waits on it forever, after success and errors
+    # alike, and eval_and_push.sh would never reach the next task. So end the process directly, keeping the exit code.
+    try:
+        main()
+        code = 0
+    except SystemExit as e:  # argparse errors and --help
+        code = e.code if isinstance(e.code, int) else 1
+    except BaseException:  # includes Ctrl+C
+        traceback.print_exc()
+        code = 1
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)  # metrics.jsonl is already closed: run_comparison writes it inside a `with` block
