@@ -170,3 +170,51 @@ Nothing in this folder is upstream CarDreamer code; the project brief is in `../
   - **This is one episode with three start points:** a sanity check, not a measurement. An earlier run the same day showed the same picture: the model below no-move everywhere, with one brief spike (21.8 at +2.4 s from step 20).
 - Verify, on the lab machine from the repo root: `PYTHONPATH=. python wm_pipeline/scripts/real_vs_imagined.py --out <file>.png`. A new episode gives different numbers. On the laptop, `.venv/bin/pytest wm_pipeline -q` gives 100 passed.
 - Phase B Steps 8–10 are done.
+
+### Step 11: our pipeline on left turn hard, lane merge and navigation (2026-11-11)
+- **What ran:** on the lab machine, `wm_pipeline/scripts/eval_and_push.sh --no-push` ran `run_carla_eval.py --task <task>` for each task in turn: 50,000 steps per task, each with its own pretrained checkpoint from Hugging Face (SHA-256 checked), float16 on the GPU, and the identity safety filter. It's the same run as Step 9, on three more tasks. These three steer with `common.yaml`'s ±0.6/±0.2 rather than right turn's ±0.9/±0.3, and the env adapter now reads each task's own values (commit 638ded5).
+- **Check 1, the same action at every step:** all 150,457 latents and actions matched upstream's `agent.policy` (50,080 on left turn, 50,171 on lane merge, 50,206 on navigation). Upstream's own `eval.py` would have driven exactly the same way from these frames, so everything below describes the checkpoints and the simulator, not our wrapper.
+- **Compared with the paper,** scored by upstream's `eval_stats.py`. Right turn hard from Step 9 is included for reference.
+
+  | Task | Checkpoint trained for (steps) | Episodes | Success: ours / paper | Collision: ours / paper | Avg speed (m/s): ours / paper |
+  |---|---|---|---|---|---|
+  | Left turn hard | 3,413,200 | 239 | 95.78% ± 0.42% / 92.36% | 4.22% ± 0.42% / 7.64% | 2.98 / 2.97 |
+  | Lane merge | 189,100 | 269 | 98.50% ± 0.75% / 90.61% | 1.50% ± 0.75% / 9.39% | 5.21 / 5.17 |
+  | Navigation | 417,200 | 114 | 66.67% ± 5.34% / 80.95% | 4.39% ± 3.16% / 7.58% | 3.98 / 3.97 |
+  | *Right turn hard (Step 9)* | *461,400* | *296* | *99.66% / 99.58%* | *0.34% / 0.42%* | *2.98 / 2.92* |
+
+- **How the episodes ended, and other metrics:**
+
+  | Metric | Left turn hard | Lane merge | Navigation |
+  |---|---|---|---|
+  | Out of lane | 0.00% | 0.00% | 11.40% ± 4.39% |
+  | Time limit reached (500 steps) | 0% | 0% | 18% ± 6% |
+  | Avg travel distance (m) | 60.82 | 96.56 | 176.68 |
+  | Avg episode length (steps) | 209.38 | 186.58 | 440.40 |
+  | Avg score | 401.97 | 686.75 | 1058.13 |
+  | Speed Over 4 Ratio | 74.46% | 130.23% | 99.47% |
+
+- **What the metrics mean:**
+  - Every episode ends in exactly one way: destination reached (= success), collision, out of lane, or the time limit. So the rates add up to about 100%. For navigation that's 66.7 + 4.4 + 11.4 + 18 ≈ 100; the small excess comes from rounding and `eval_stats.py` averaging 3 batches.
+  - **Speed Over 4 Ratio** is the speed divided by 4 m/s for every task, a fixed yardstick. Lane merge's target speed is 6 m/s (`tasks.yaml`), so 130% is expected, not an error.
+  - **Score** is the summed reward. It can't be compared across tasks, which have different route lengths and reward settings.
+- **The gaps from the paper are real, not luck,** at least for lane merge and navigation. The `±` is a standard error over just 3 batches, which understates the uncertainty. 95% ranges from the episode counts (Wilson intervals; the counts are rate × episodes, so approximate):
+  - Lane merge collisions: about 4 of 269, so 0.6–3.8%. The paper's 9.39% is far outside. Success: 96.2–99.4%, against the paper's 90.61%.
+  - Navigation success: about 76 of 114, so 57.6–74.7%. The paper's 80.95% is outside.
+  - Navigation collisions: about 5 of 114, so 1.9–9.9%. The paper's 7.58% is **inside**, so navigation's collisions agree with the paper, and its gap is timeouts and leaving the lane.
+  - Left turn is borderline: success 92.5–97.7% and collisions 2.3–7.5%, with the paper's 92.36% and 7.64% just outside.
+- **What the differences are not:**
+  - **Not our pipeline:** Check 1.
+  - **Not a different driving style:** average speeds match the paper within 0.04 m/s on all four tasks. The differences are in the rare events: crashes, timeouts and leaving the lane.
+  - **Not training length:** lane merge's checkpoint trained for only 189,100 steps, inside the 150k–200k steps in which the paper says its tasks converge, and it beat the paper by the most. Left turn's trained for 3.4M steps and beat it a little. Navigation's trained for 417k steps and fell short. There's no pattern.
+- **Possible causes (none tested):**
+  - **The CARLA build.** We run CARLA 0.9.15's Windows build; the paper used Linux. Small differences in the traffic manager's driving (how other cars accelerate, change lanes or cut in) would change how often a merge or a turn goes wrong.
+  - **The paper's evaluation.** The published checkpoints may not be the exact models behind the paper's table, or its evaluation used settings the paper doesn't report (traffic, number of episodes, seeds).
+  - **Navigation's timeouts are on a knife edge.** Success means covering 200 m of route (`SUCCESS_DISTANCE_THRESHOLD` in `carla_navigation_env.py`) within the 500-step limit (`time_limit` in `tasks.yaml`), an average of 4 m/s. Our car averaged 3.98 m/s, at which 200 m takes about 503 steps. Any slowdown for traffic tips an episode into a timeout, so a small change in traffic moves many episodes from success to timeout or back. Navigation is also the most random task (random start, random route, 50 autopilot cars) and had the fewest episodes (114).
+  - Telling these apart would need the same checkpoints run on a Linux CARLA machine.
+- **Summary for the meeting:**
+  1. Our pipeline reproduces upstream's policy exactly on all four tasks (200,000+ steps checked in total).
+  2. The driving matches the paper: the speeds agree on every task.
+  3. Success differs from the paper by task, in both directions, and training length doesn't explain it. The evaluation setup (CARLA build, or the paper's exact protocol) is the likely cause. That's an open question, not a bug.
+- **Where the results are:** committed on the lab machine in `notes/results/2026-11-11/<task>/` (`eval_stats.txt`, `metrics.jsonl`, `run_tail.txt`). Not pushed yet: the lab's Windows git is signed in to another person's GitHub account. Full logs are in `logdir/runner_2026-11-11_<task>.log` (gitignored).
+- **Verify,** on the lab machine from the repo root: `bash wm_pipeline/scripts/eval_and_push.sh --no-push --tag <new tag>`, then `cat notes/results/<tag>/*/eval_stats.txt`. New traffic gives slightly different numbers. On the laptop, `.venv/bin/pytest wm_pipeline -q` gives 104 passed.
